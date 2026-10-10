@@ -1,4 +1,17 @@
+[project]
+name = "footballstats"
+version = "0.1.0"
+description = "Read-only football statistics dashboard"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "starlette>=1.6,<2",
+    "uvicorn>=0.52,<1",
+]
+
+# Deploy the application directly; do not build/install the repository as a package.
+[tool.uv]
+package = false
+
 # Explicit ASGI entrypoint: src/server.py is the optional stdio MCP server.
-# Runtime dependencies remain in requirements.txt.
 [tool.vercel]
 entrypoint = "src.webapp:app"

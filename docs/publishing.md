@@ -41,15 +41,21 @@ server MCP stdio: non è un'app ASGI e non va scelto come entrypoint. Anche
 `scripts.test_provider_stats:app`, suggerito dall'autodetection, è errato:
 è un modulo di test che importa l'app, non il modulo di produzione.
 
-`.python-version` seleziona Python 3.13. Le dipendenze runtime rimangono in
-`requirements.txt`. Non serve convertire il progetto in Node/React o lanciare
+`.python-version` seleziona Python 3.13. Vercel usa la sezione `[project]` di
+`pyproject.toml` per risolvere le dipendenze con uv; deve contenere nome,
+versione, versione Python e dipendenze runtime. `requirements.txt` conserva
+le stesse dipendenze per l'installazione locale con pip. Non serve convertire il progetto in Node/React o lanciare
 Uvicorn nella build: Vercel carica direttamente l'oggetto ASGI.
+
+Versionare anche `uv.lock`, generato con `uv lock`, per fissare le versioni
+risolte. Dopo una modifica alle dipendenze aggiornare il lockfile e mantenere
+allineato `requirements.txt`.
 
 Nel progetto Vercel importato da GitHub usare:
 
 - Root Directory: `./`
 - Framework/Application Preset: `Python`
-- Install Command: `pip install -r requirements.txt`
+- Install Command: lasciare il default automatico (rimuovere l'override pip)
 - Build Command: lasciare il default / nessun comando personalizzato
 - Output Directory: lasciare il default / N/A
 
