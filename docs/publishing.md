@@ -4,9 +4,11 @@ Il codice può essere versionato su GitHub. GitHub Pages pubblica contenuti
 statici e non esegue questo backend Starlette/Python: caricare un repository
 non rende automaticamente disponibile la dashboard online.
 
-Al momento Supabase non è collegato, non ci sono migrazioni SQL da eseguire e
-non è stato creato alcun processo pianificato. La cartella originale non aveva
-un repository Git o un remote; nessun push è stato effettuato durante questa verifica.
+Il collegamento Supabase richiede il setup descritto in
+[supabase-setup.md](supabase-setup.md): migrazione SQL, importazione locale e
+variabili Vercel. Schema, credenziali separate e importazione remota sono stati
+verificati l'11 ottobre 2026; resta da attivare il backend Supabase su Vercel.
+Nessun processo pianificato è attivo.
 
 ## Pubblicare il codice
 

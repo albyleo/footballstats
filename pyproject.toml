@@ -6,6 +6,7 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "starlette>=1.6,<2",
     "uvicorn>=0.52,<1",
+    "psycopg[binary]>=3.2,<4",
 ]
 
 # Deploy the application directly; do not build/install the repository as a package.

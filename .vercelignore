@@ -11,6 +11,7 @@ artifacts/
 data/
 scripts/
 docs/
+supabase/
 src/server.py
 src/db.py
 src/schema.py

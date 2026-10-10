@@ -12,6 +12,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import provider_stats
+import cloud_store
 from report_cache import ReportCache
 import uvicorn
 from starlette.applications import Starlette
@@ -40,6 +41,10 @@ async def provider_report(request):
                 max(0, min(100, int(p.get("last_n", "0")))), p.get("sort", "total"))
 
         def read_local():
+            if cloud_store.enabled():
+                snapshot = cloud_store.SNAPSHOTS.get()
+                return REPORT_CACHE.get(args, ('supabase', snapshot['revision']),
+                                        lambda: provider_stats.report(*args, snapshot=snapshot))
             return REPORT_CACHE.get(args, provider_stats.input_revision(),
                                     lambda: provider_stats.report(*args))
 
@@ -52,6 +57,9 @@ async def provider_report(request):
         if etag in candidates or "*" in candidates:
             return Response(status_code=304, headers=headers)
         return Response(body, media_type="application/json", headers=headers)
+    except cloud_store.StorageUnavailable as exc:
+        return JSONResponse({'error': str(exc)}, status_code=503,
+                            headers={'Cache-Control': 'no-store', 'Retry-After': '15'})
     except (ValueError, TypeError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400,
                             headers={"Cache-Control": "no-store"})

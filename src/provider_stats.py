@@ -99,10 +99,10 @@ def _dataset(directory, signature):
 
 
 def report(kind="players", metric="shots-on-target", league="", season="", min_minutes=0,
-           team="", search="", last_n=0, sort="total"):
+           team="", search="", last_n=0, sort="total", *, snapshot=None):
     if kind not in ("players", "teams") or metric not in METRICS or sort not in ("total", "per90", "minutes", "name"):
         raise ValueError("Tipo o metrica non valida")
-    players, teams, warnings = dataset()
+    players, teams, warnings = dataset() if snapshot is None else (snapshot['players'], snapshot['teams'], snapshot['warnings'])
     selected = [r for r in (players if kind == "players" else teams)
                 if (not league or r["league"] == league) and (not season or r["season"] == season)
                 and (not team or r["team"] == team)]
@@ -147,7 +147,7 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
         result.sort(key=lambda r: (r[sort] is not None, r[sort] or 0), reverse=True)
     all_rows = teams
     coverage_cards = []
-    for lid, entry in catalog().items():
+    for lid, entry in (catalog() if snapshot is None else snapshot['catalog']).items():
         loaded = [r for r in teams if r.get("league_id") == lid]
         coverage_cards.append({"id": lid, "name": entry["name"],
             "provider": "Sportmonks", "scope": "players_and_teams",
@@ -165,7 +165,7 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
                 "matches": len({r["fixture"] for r in loaded}), "teams": len({r["id"] for r in loaded}),
                 "players": 0, "latest_match": max(r["date"] for r in loaded)})
     status_path = ROOT / "sync-status.json"
-    sync = json.loads(status_path.read_text(encoding="utf-8")) if status_path.exists() else None
+    sync = snapshot['sync'] if snapshot is not None else (json.loads(status_path.read_text(encoding="utf-8")) if status_path.exists() else None)
     audit_rows = {r["fixture"]: r["halftime_audit"] for r in teams if "halftime_audit" in r
                   and (not league or r["league"] == league) and (not season or r["season"] == season)
                   and (not team or r["team"] == team)}

@@ -40,7 +40,7 @@ Browser → backend in sola lettura → cache report → statistiche locali
 | `src/provider_stats.py` | Normalizzazione e aggregazione; cache del dataset basata sui file |
 | `src/report_cache.py` | Risposte JSON pronte, cache condivisa dai visitatori dello stesso processo |
 | `football_mvp.duckdb` | Vecchio archivio SQL, solo per MCP locale opzionale |
-| Supabase | **Non configurato e non usato** |
+| Supabase | Backend opzionale: attivare con `FOOTBALL_STORAGE=supabase` dopo il setup |
 
 **Rileggi dati locali non chiama Sportmonks o API-Football.** Anche filtri,
 ricerche, paginazione e caricamento iniziale leggono solo il nostro backend.
@@ -145,7 +145,17 @@ Definizioni: [Sportmonks Scores](https://docs.sportmonks.com/v3/tutorials-and-gu
 [Periods](https://docs.sportmonks.com/v3/tutorials-and-guides/tutorials/includes/periods),
 [Football-data.co.uk](https://football-data.co.uk/notes.txt).
 
-## Pubblicazione e Supabase: prossimo passaggio, non ancora implementato
+## Pubblicazione e Supabase
+
+Il backend PostgreSQL e l'importatore sono ora disponibili. Seguire
+[docs/supabase-setup.md](docs/supabase-setup.md) per applicare la migrazione,
+creare credenziali separate, importare l'archivio e configurare Vercel.
+La modalità predefinita resta locale finché `FOOTBALL_STORAGE=supabase` non
+viene impostata. L'11 ottobre 2026 il progetto remoto è stato popolato con
+270 partite, 84 squadre e 4.037 osservazioni individuali; accesso reader e
+parità dei report verificati. L'attivazione su Vercel richiede le due variabili
+descritte nella guida e il deploy del codice aggiornato.
+Budget globale e lock dei download rimangono da implementare prima dello scheduler.
 
 Istruzioni per caricare il codice su GitHub, scelta Supabase senza Redis e
 procedura di migrazione: [docs/publishing.md](docs/publishing.md).
@@ -165,8 +175,8 @@ devono produrre mille richieste ai feed.
 Le chiavi dei provider e quelle privilegiate Supabase restano sul backend.
 Eventuali accessi diretti dal browser richiedono permessi di sola lettura e
 Row Level Security. Riferimento: [sicurezza dei dati Supabase](https://supabase.com/docs/guides/database/secure-data).
-Per ora il deploy richiederebbe un volume persistente per i file locali;
-questo repository non effettua ancora deployment né sincronizzazioni pianificate.
+In modalità Supabase il deploy non richiede un volume per i file locali.
+Nessuna sincronizzazione pianificata è attiva.
 
 ## Pulizia e strumenti opzionali
 
