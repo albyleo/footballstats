@@ -1,0 +1,4 @@
+# Explicit ASGI entrypoint: src/server.py is the optional stdio MCP server.
+# Runtime dependencies remain in requirements.txt.
+[tool.vercel]
+entrypoint = "src.webapp:app"

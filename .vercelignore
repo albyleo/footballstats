@@ -1,0 +1,20 @@
+.git/
+.venv/
+**/__pycache__/
+.env
+.env.*
+.mcp.json
+*.duckdb
+*.duckdb.wal
+*.log
+artifacts/
+data/
+scripts/
+docs/
+src/server.py
+src/db.py
+src/schema.py
+src/ingest.py
+requirements-dev.txt
+requirements-mcp.txt
+Modificato smoke_test.py, eseguito.txt

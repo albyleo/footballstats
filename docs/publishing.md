@@ -33,6 +33,45 @@ e non viene letto dalla dashboard. I test funzionano senza token e senza feed.
 
 ## Scelta per il primo deploy: Supabase senza Redis
 
+### Deploy del backend Python su Vercel
+
+La configurazione `pyproject.toml` indica esplicitamente
+`[tool.vercel] entrypoint = "src.webapp:app"`. Il file `src/server.py` è il
+server MCP stdio: non è un'app ASGI e non va scelto come entrypoint. Anche
+`scripts.test_provider_stats:app`, suggerito dall'autodetection, è errato:
+è un modulo di test che importa l'app, non il modulo di produzione.
+
+`.python-version` seleziona Python 3.13. Le dipendenze runtime rimangono in
+`requirements.txt`. Non serve convertire il progetto in Node/React o lanciare
+Uvicorn nella build: Vercel carica direttamente l'oggetto ASGI.
+
+Nel progetto Vercel importato da GitHub usare:
+
+- Root Directory: `./`
+- Framework/Application Preset: `Python`
+- Install Command: `pip install -r requirements.txt`
+- Build Command: lasciare il default / nessun comando personalizzato
+- Output Directory: lasciare il default / N/A
+
+Caricare su GitHub i file di configurazione nuovi, poi distribuire il nuovo
+commit. Ripetere il deployment del vecchio commit non applica la correzione.
+Non configurare `scripts.test_provider_stats:app` nell'interfaccia Vercel.
+Nessuna chiave dei feed è necessaria per questo frontend/backend di sola lettura.
+
+`.vercelignore` esclude credenziali locali, ambienti virtuali, test, MCP e dati
+locali anche dai caricamenti tramite CLI. `src/static/` rimane nel bundle e
+Starlette serve HTML e JavaScript insieme agli endpoint API.
+
+**Stato dei dati:** il primo deploy mostra un archivio vuoto, perché i dati
+scaricati non sono su GitHub e Supabase non è ancora collegato. Questo non è
+un errore del deploy. Non usare il filesystem della Function come archivio
+persistente e non avviare sync durante le richieste web. La cache in memoria è
+per istanza e può sparire ai riavvii; budget e lock condivisi saranno in Supabase.
+
+Riferimento: [Vercel Python entrypoints](https://vercel.com/docs/functions/runtimes/python#python-entrypoints).
+
+### Archivio e cache condivisi
+
 Usare PostgreSQL/Supabase come archivio persistente condiviso, conservando la
 cache breve nel backend per le letture ripetute. Redis potrà essere valutato
 se misure reali mostreranno latenza o carico elevati con più istanze del sito.
