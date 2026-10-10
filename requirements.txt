@@ -1,0 +1,2 @@
+starlette>=1.6,<2
+uvicorn>=0.52,<1
