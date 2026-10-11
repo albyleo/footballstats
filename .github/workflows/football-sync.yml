@@ -1,0 +1,50 @@
+name: Update football archive
+
+on:
+  schedule:
+    - cron: '15 7 * * 2,5'
+      timezone: Europe/Rome
+  workflow_dispatch:
+    inputs:
+      cached_only:
+        description: Validate/import cached data without contacting providers
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: football-archive-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FOOTBALL_IMPORT_DATABASE_URL: ${{ secrets.FOOTBALL_IMPORT_DATABASE_URL }}
+      SPORTMONKS_TOKEN: ${{ secrets.SPORTMONKS_TOKEN }}
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install locked runtime
+        run: |
+          python -m pip install uv==0.13.0
+          uv sync --frozen
+      - name: Validate secrets
+        run: |
+          test -n "$FOOTBALL_IMPORT_DATABASE_URL"
+          test -n "$SPORTMONKS_TOKEN"
+      - name: Acquire and import changed fixtures
+        env:
+          CACHED_ONLY: ${{ inputs.cached_only }}
+        run: |
+          if [ "$CACHED_ONLY" = "true" ]; then
+            uv run --frozen python scripts/scheduled_sync.py --cached-only
+          else
+            uv run --frozen python scripts/scheduled_sync.py
+          fi

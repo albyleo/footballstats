@@ -33,7 +33,7 @@ function updateView() {
   $('minutes-filter').hidden = !player;
   $('min_minutes').disabled = !player;
   $('team-note').hidden = player;
-  for (const metric of ['first-half-goals','corners']) {
+  for (const metric of ['first-half-goals','corners','goals-conceded']) {
     const option = $('metric').querySelector(`[value="${metric}"]`);
     option.hidden = player;
     if (player && $('metric').value === metric) $('metric').value = 'goals';
@@ -96,8 +96,8 @@ function renderTable(all = false) {
   if (!latest) return;
   const player = $('kind').value === 'players', detail = $('layout').value === 'detail';
   const metric = $('metric').value, metricName = latest.metrics[metric];
-  const defaults = player ? ['goals','assists','shots-on-target','shots-total','yellowcards','fouls','fouls-drawn'] : ['goals','first-half-goals','shots-on-target','shots-total','yellowcards','fouls','corners'];
-  const keys = [...new Set([metric, ...defaults])].filter(k => latest.metric_coverage[k] > 0 || ['fouls-drawn','shots-total'].includes(k));
+  const defaults = player ? ['goals','assists','shots-on-target','shots-total','yellowcards','fouls','fouls-drawn'] : ['goals','goals-conceded','first-half-goals','shots-on-target','shots-total','yellowcards','fouls','corners'];
+  const keys = [...new Set([metric, ...defaults])].filter(k => latest.metric_coverage[k] > 0 || ['fouls-drawn','shots-total','goals-conceded'].includes(k));
   const table = document.createElement('table'), head = document.createElement('thead'), header = document.createElement('tr');
   const caption = document.createElement('caption'); caption.className = 'sr-only'; caption.textContent = `${player ? 'Giocatori' : 'Squadre'}: ${metricName}`; table.append(caption);
   const columns = detail ? [player?'Giocatore':'Squadra','Campionato',metricName,player?'Per 90′ osservati':'Media per partita',player?'Minuti osservati':'Partite con dato',player?'Presenze':'Partite',player?'Minuti totali':'Ultimi risultati',player?'Da titolare':'Base titolare stagionale'] : [player?'Giocatore':'Squadra',player?'Squadra':'Campionato',...keys.map(k=>latest.metrics[k]),player?'Minuti':'Ultimi risultati',player?'Presenze':'Partite',player?'Da titolare':'Base titolare stagionale'];

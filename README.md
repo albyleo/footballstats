@@ -176,7 +176,11 @@ Le chiavi dei provider e quelle privilegiate Supabase restano sul backend.
 Eventuali accessi diretti dal browser richiedono permessi di sola lettura e
 Row Level Security. Riferimento: [sicurezza dei dati Supabase](https://supabase.com/docs/guides/database/secure-data).
 In modalità Supabase il deploy non richiede un volume per i file locali.
-Nessuna sincronizzazione pianificata è attiva.
+È disponibile il workflow GitHub Actions `Update football archive`: martedì e
+venerdì alle 07:15 Europe/Rome, attivo quando pubblicato sul branch predefinito.
+Usa cache persistente privata, budget giornalieri e lock PostgreSQL. L'import
+confronta i dati ed evita scritture/revisioni inutili quando sono invariati.
+Setup, limiti e diagnostica: [docs/automatic-updates.md](docs/automatic-updates.md).
 
 ## Pulizia e strumenti opzionali
 

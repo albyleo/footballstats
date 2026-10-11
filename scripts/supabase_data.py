@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 import provider_stats
 from cloud_store import connect, StorageUnavailable
+from sync_diff import changed_fixtures, SYNC_LOCK
 
 
 def load_config():
@@ -52,7 +53,18 @@ def import_snapshot(conn, snapshot):
     with conn.transaction():
         conn.execute("SET LOCAL statement_timeout = '120s'")
         conn.execute("SET LOCAL lock_timeout = '10s'")
+        conn.execute('SELECT pg_advisory_xact_lock(%s)', [SYNC_LOCK])
         conn.execute('SELECT id FROM football.dataset_state WHERE id=1 FOR UPDATE')
+        previous = conn.execute('SELECT metadata FROM football.dataset_state WHERE id=1').fetchone()[0]
+        old_players = [r[0] for r in conn.execute('SELECT payload FROM football.player_match_stats')]
+        old_teams = [r[0] for r in conn.execute('SELECT payload FROM football.team_match_stats')]
+        changed = changed_fixtures(snapshot, old_players, old_teams)
+        merged_catalog = {**previous.get('catalog', {}), **{str(k):v for k,v in snapshot['catalog'].items()}}
+        if not changed and merged_catalog == previous.get('catalog', {}):
+            return {**counts(snapshot), 'changed_fixtures': 0, 'updated': False}
+        original_counts = counts(snapshot)
+        snapshot = {**snapshot, **{kind: [r for r in snapshot[kind]
+                    if (r['provider'], str(r['fixture'])) in changed] for kind in ('teams','players')}}
         fixture_rows = {}
         team_rows = {}
         player_rows = {}
@@ -75,9 +87,9 @@ def import_snapshot(conn, snapshot):
                             [(r['provider'],str(r['fixture']),str(r['id']),str(r['team_id']),Jsonb(r)) for r in snapshot['players']])
         previous = conn.execute('SELECT metadata FROM football.dataset_state WHERE id=1').fetchone()[0]
         merged_catalog = {**previous.get('catalog', {}), **{str(k):v for k,v in snapshot['catalog'].items()}}
-        metadata = dict(catalog=merged_catalog, sync=snapshot['sync'], warnings=snapshot['warnings'])
+        metadata = {**previous, 'catalog': merged_catalog, 'sync': snapshot['sync'], 'warnings': snapshot['warnings']}
         conn.execute('UPDATE football.dataset_state SET revision=revision+1,metadata=%s,updated_at=now() WHERE id=1', [Jsonb(metadata)])
-    return counts(snapshot)
+    return {**original_counts, 'changed_fixtures': len(changed), 'updated': True}
 
 
 def provision():
@@ -137,7 +149,8 @@ def main():
                 print('Qualità dati:', warning)
             if args.action == 'import':
                 with connect('FOOTBALL_IMPORT_DATABASE_URL') as conn:
-                    import_snapshot(conn, snapshot)
+                    result = import_snapshot(conn, snapshot)
+                    print('Partite nuove/modificate:', result['changed_fixtures'])
                 print('Importazione completata. Chiamate ai feed: 0.')
         else:
             with connect('FOOTBALL_IMPORT_DATABASE_URL') as conn:

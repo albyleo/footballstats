@@ -92,7 +92,7 @@ class CacheTests(unittest.TestCase):
             before_home = build.call_count
             home, dashboard = client.get("/"), client.get("/providers")
             self.assertEqual(home.status_code, 200)
-            self.assertIn('MyCombo SRL', home.text)
+            self.assertIn('MyCombo srl', home.text)
             self.assertNotEqual(home.content, dashboard.content)
             self.assertEqual(build.call_count, before_home)
             for path in ("/api/query", "/api/leaderboard"):

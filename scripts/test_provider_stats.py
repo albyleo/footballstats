@@ -10,6 +10,18 @@ from webapp import app
 
 
 class StatsTests(unittest.TestCase):
+    def test_conceded_uses_opponent_before_team_filter_and_preserves_snapshot(self):
+        base = dict(provider='sportmonks', league='L', season='S', date='2026-10-10', fetched_at='now')
+        teams = [{**base, 'fixture': 1, 'id': 1, 'name': 'A', 'team': 'A', 'stats': {'goals': 3}},
+                 {**base, 'fixture': 1, 'id': 2, 'name': 'B', 'team': 'B', 'stats': {'goals': 0}},
+                 {**base, 'fixture': 2, 'id': 1, 'name': 'A', 'team': 'A', 'stats': {'goals': 1}}]
+        snapshot = dict(players=[], teams=teams, warnings=[], catalog={}, sync=None)
+        report = stats.report(kind='teams', metric='goals-conceded', team='A', snapshot=snapshot)
+        row = report['rows'][0]
+        self.assertEqual((row['total'], row['covered'], row['matches']), (0, 1, 2))
+        self.assertNotIn('goals-conceded', teams[0]['stats'])
+        self.assertEqual(stats.report(kind='teams', metric='goals-conceded', team='B', snapshot=snapshot)['rows'][0]['total'], 3)
+
     def test_missing_values_paired_minutes_and_unused_subs(self):
         base = dict(provider="sportmonks", id=1, name="Player", team="Team", league="L",
                     season="S", starter=True, fetched_at="2026-10-10", date="2026-10-09")

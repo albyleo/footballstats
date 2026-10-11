@@ -12,7 +12,7 @@ from score_audit import audit_match, score_value
 ROOT = Path(__file__).resolve().parents[1] / "data/providers/sportmonks"
 METRICS = {"shots-on-target": "Tiri in porta", "yellowcards": "Gialli",
            "fouls": "Falli commessi", "fouls-drawn": "Falli subiti", "assists": "Assist", "goals": "Gol",
-           "shots-total": "Tiri totali", "first-half-goals": "Gol primo tempo", "corners": "Calci d’angolo"}
+           "shots-total": "Tiri totali", "goals-conceded": "Gol subiti", "first-half-goals": "Gol primo tempo", "corners": "Calci d’angolo"}
 
 
 def numeric(value):
@@ -104,12 +104,26 @@ def _dataset(directory, signature):
     return players, teams, warnings
 
 
+def with_goals_conceded(teams):
+    """Derive opponent FT goals before filtering or merging; never mutate snapshots."""
+    fixtures = defaultdict(list)
+    for row in teams:
+        fixtures[(row['provider'], row['league'], row['season'], row['fixture'])].append(row)
+    result = []
+    for rows in fixtures.values():
+        for row in rows:
+            opponent = [other for other in rows if other['id'] != row['id']]
+            conceded = opponent[0]['stats'].get('goals') if len(rows) == 2 and len(opponent) == 1 else None
+            result.append({**row, 'stats': {**row['stats'], 'goals-conceded': conceded}})
+    return result
+
+
 def report(kind="players", metric="shots-on-target", league="", season="", min_minutes=0,
            team="", search="", last_n=0, sort="total", *, snapshot=None):
     if kind not in ("players", "teams") or metric not in METRICS or sort not in ("total", "per90", "minutes", "name"):
         raise ValueError("Tipo o metrica non valida")
     players, teams, warnings = dataset() if snapshot is None else (snapshot['players'], snapshot['teams'], snapshot['warnings'])
-    players, teams, merge_warnings = understat_stats.merge_sources(players, teams)
+    players, teams, merge_warnings = understat_stats.merge_sources(players, with_goals_conceded(teams))
     lineups = season_lineups(players, teams) if kind == 'teams' else {}
     warnings = warnings + merge_warnings
     warnings = sorted(set(warnings + [issue for row in teams for issue in row.get('player_data_issues', [])]))

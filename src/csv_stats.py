@@ -10,12 +10,12 @@ from score_audit import goal_count
 RAW = Path(__file__).resolve().parents[1] / "data/raw"
 LEAGUES = {"I1": ("Serie A", "Italia"), "E0": ("Premier League", "Inghilterra"),
            "SP1": ("La Liga", "Spagna"), "D1": ("Bundesliga", "Germania"),
-           "F1": ("Ligue 1", "Francia")}
+           "F1": ("Ligue 1", "Francia"), "P1": ("Primeira Liga", "Portogallo")}
 METRICS = {"shots-on-target": "ST", "shots-total": "S", "yellowcards": "Y", "fouls": "F", "corners": "C"}
 
 
 def files(root=RAW):
-    return sorted(p for p in root.glob("*.csv") if re.fullmatch(r"(?:I1|E0|SP1|D1|F1)_20\d\d-\d\d\.csv", p.name))
+    return sorted(p for p in root.glob("*.csv") if re.fullmatch(r"(?:I1|E0|SP1|D1|F1|P1)_20\d\d-\d\d\.csv", p.name))
 
 
 def load_rows(paths):
