@@ -44,7 +44,7 @@ function updateView() {
   }
   for (const n of [5,10]) $('last_n').querySelector(`[value="${n}"]`).textContent = `Ultime ${n} ${player ? 'presenze' : 'partite'}`;
   $('layout').querySelector('[value="detail"]').textContent = player ? 'Dettaglio / per 90′' : 'Dettaglio / medie';
-  document.title = `${player ? 'Giocatori' : 'Squadre'} — MyCombo`;
+  document.title = `${player ? 'Giocatori' : 'Squadre'} — MyCombo srl`;
 }
 
 function cell(row, tag, value, note) {
