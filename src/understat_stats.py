@@ -8,9 +8,15 @@ from score_audit import goal_count
 
 ROOT = Path(__file__).resolve().parents[1] / 'data/providers/understat'
 LEAGUES = {'Serie_A': ('I1', 'Serie A'), 'EPL': ('E0', 'Premier League'),
-           'La_liga': ('SP1', 'La Liga')}
+           'La_liga': ('SP1', 'La Liga'), 'Bundesliga': ('D1', 'Bundesliga'),
+           'Ligue_1': ('F1', 'Ligue 1')}
 # Explicit equivalences verified against both catalogues. No fuzzy joins.
 ALIASES = {'Serie A': {'AC Milan': 'Milan', 'Parma Calcio 1913': 'Parma'},
+           'Bundesliga': {'Bayer Leverkusen': 'Leverkusen', 'Borussia Dortmund': 'Dortmund',
+                          'Borussia M.Gladbach': "M'gladbach", 'Eintracht Frankfurt': 'Ein Frankfurt',
+                          'FC Cologne': 'FC Koln', 'Hamburger SV': 'Hamburg', 'Mainz 05': 'Mainz',
+                          'RasenBallsport Leipzig': 'RB Leipzig', 'VfB Stuttgart': 'Stuttgart'},
+           'Ligue 1': {'Paris Saint Germain': 'Paris SG'},
            'Premier League': {'Manchester City': 'Man City', 'Manchester United': 'Man United',
                               'Newcastle United': 'Newcastle', 'Nottingham Forest': "Nott'm Forest"},
            'La Liga': {'Athletic Club': 'Ath Bilbao', 'Atletico Madrid': 'Ath Madrid',

@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import provider_stats
 import cloud_store
+from excel_export import export_excel
 from report_cache import ReportCache
 import uvicorn
 from starlette.applications import Starlette
@@ -78,6 +79,7 @@ app = Starlette(routes=[
     Route("/providers", provider_page),
     Route("/documentation", documentation_page),
     Route("/api/providers/report", provider_report),
+    Route("/api/export.xlsx", export_excel, methods=["POST"]),
     Mount("/static", StaticFiles(directory=STATIC), name="static"),
 ])
 

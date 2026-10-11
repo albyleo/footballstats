@@ -50,6 +50,7 @@ function updateView() {
 function cell(row, tag, value, note) {
   const element = document.createElement(tag);
   element.textContent = display(value);
+  element.dataset.excel = JSON.stringify(value ?? null);
   if (tag === 'th') element.scope = 'col';
   if (note) { const small = document.createElement('small'); small.textContent = note; element.append(small); }
   row.append(element);
@@ -65,6 +66,7 @@ function formCell(row, values) {
     group.append(badge);
   }
   element.append(group);
+  element.dataset.excel = JSON.stringify(values.map(v=>v||'—').join(' '));
 }
 function options(id, values) {
   const select = $(id), previous = select.value, placeholder = select.options[0].textContent;
@@ -72,19 +74,38 @@ function options(id, values) {
   values.forEach(value => select.add(new Option(value, value)));
   select.value = values.includes(previous) ? previous : '';
 }
-function renderTable() {
+function lineupCell(tr, row, exporting) {
+  const info = row.season_lineup;
+  const names = info?.reference.map(p=>`${p.name} (${p.starts} da titolare)`).join('; ') || '';
+  const note = info ? `Ultima: ${info.latest_date}. Base su ${info.sample}/${info.season_matches} formazioni stagionali. ${info.tie?'Pari merito al taglio degli 11; ordine per minuti e ID. ':''}${names}` : 'Formazioni non disponibili';
+  const td = cell(tr,'td',info?.latest_common == null ? null : `${info.latest_common}/11 nell’ultima`, exporting ? note : null);
+  if (!exporting && info) {
+    const details=document.createElement('details'), summary=document.createElement('summary'), text=document.createElement('p');
+    summary.textContent=`Base: ${info.sample}/${info.season_matches} partite`;
+    text.textContent=note;details.append(summary,text);td.append(details);
+  }
+  const next=cell(tr,'td',null, 'Formazione non acquisita');
+  if (!exporting) {
+    const link=document.createElement('a');
+    link.href='https://www.google.com/search?q='+encodeURIComponent(`${row.team} ${row.league} prossima partita formazioni ufficiali`);
+    link.target='_blank';link.rel='noopener noreferrer';link.textContent='Cerca formazioni ↗';
+    next.append(link);
+  }
+}
+function renderTable(all = false) {
   if (!latest) return;
   const player = $('kind').value === 'players', detail = $('layout').value === 'detail';
   const metric = $('metric').value, metricName = latest.metrics[metric];
-  const defaults = player ? ['goals','assists','shots-on-target','yellowcards','fouls'] : ['goals','first-half-goals','shots-on-target','yellowcards','fouls','corners'];
-  const keys = [...new Set([metric, ...defaults])].filter(k => latest.metric_coverage[k] > 0);
+  const defaults = player ? ['goals','assists','shots-on-target','shots-total','yellowcards','fouls','fouls-drawn'] : ['goals','first-half-goals','shots-on-target','shots-total','yellowcards','fouls','corners'];
+  const keys = [...new Set([metric, ...defaults])].filter(k => latest.metric_coverage[k] > 0 || ['fouls-drawn','shots-total'].includes(k));
   const table = document.createElement('table'), head = document.createElement('thead'), header = document.createElement('tr');
   const caption = document.createElement('caption'); caption.className = 'sr-only'; caption.textContent = `${player ? 'Giocatori' : 'Squadre'}: ${metricName}`; table.append(caption);
-  const columns = detail ? [player?'Giocatore':'Squadra','Campionato',metricName,player?'Per 90′ osservati':'Media per partita',player?'Minuti osservati':'Partite con dato',player?'Presenze':'Partite',player?'Minuti totali':'Ultimi risultati',player?'Da titolare':'Titolari in comune'] : [player?'Giocatore':'Squadra',player?'Squadra':'Campionato',...keys.map(k=>latest.metrics[k]),player?'Minuti':'Ultimi risultati',player?'Presenze':'Partite',player?'Da titolare':'Titolari in comune'];
+  const columns = detail ? [player?'Giocatore':'Squadra','Campionato',metricName,player?'Per 90′ osservati':'Media per partita',player?'Minuti osservati':'Partite con dato',player?'Presenze':'Partite',player?'Minuti totali':'Ultimi risultati',player?'Da titolare':'Base titolare stagionale'] : [player?'Giocatore':'Squadra',player?'Squadra':'Campionato',...keys.map(k=>latest.metrics[k]),player?'Minuti':'Ultimi risultati',player?'Presenze':'Partite',player?'Da titolare':'Base titolare stagionale'];
+  if (!player) columns.push('Prossima partita / base');
   columns.forEach(value => cell(header, 'th', value)); head.append(header); table.append(head);
   const body = document.createElement('tbody');
   page = Math.min(page, Math.max(0, Math.ceil(latest.rows.length/size)-1));
-  for (const row of latest.rows.slice(page*size,(page+1)*size)) {
+  for (const row of (all === true ? latest.rows : latest.rows.slice(page*size,(page+1)*size))) {
     const tr = document.createElement('tr');
     cell(tr,'td',row.name,player&&detail?row.team:null);
     cell(tr,'td',player&&!detail?row.team:row.league,player&&!detail?row.league:row.season);
@@ -99,10 +120,13 @@ function renderTable() {
       if (player) cell(tr,'td',row.minutes); else formCell(tr,row.form);
       cell(tr,'td',row.matches);
     }
-    cell(tr,'td',player?row.starts:row.same_starters==null?null:`${row.same_starters}/11`);
+    if (player) cell(tr,'td',row.starts); else lineupCell(tr,row,all === true);
     body.append(tr);
   }
-  table.append(body); $('table').replaceChildren(table);
+  table.append(body);
+  if (all === true) return table;
+  $('export-excel').disabled = !latest.rows.length;
+  $('table').replaceChildren(table);
   if (!latest.rows.length) {
     const p=document.createElement('p');p.className='empty';
     p.textContent=player&&latest.catalog.find(c=>c.name===$('league').value)?.scope==='teams'?'Questo campionato contiene solo statistiche di squadra. Apri la vista Squadre per esplorarle.':'Nessun risultato. Prova ad ampliare i filtri o azzerarli.';
@@ -123,6 +147,7 @@ async function refresh() {
   if ($('kind').value==='teams') params.set('min_minutes','0');
   history.replaceState(null,'','/providers?'+params);
   latest=null; $('table').replaceChildren(); $('table').setAttribute('aria-busy','true');
+  $('export-excel').disabled=true;
   $('status').textContent='Caricamento archivio…'; $('quality').textContent=''; $('pagination').textContent='—';
   $('reload').disabled=true; $('prev').disabled=true; $('next').disabled=true;
   for(const id of ['count-rows','count-matches','count-latest','count-seasons']) $(id).textContent='—';
@@ -184,4 +209,9 @@ $('layout').addEventListener('change',renderTable);
 $('prev').addEventListener('click',()=>{page--;renderTable();$('table').scrollTop=0;});
 $('next').addEventListener('click',()=>{page++;renderTable();$('table').scrollTop=0;});
 $('reload').addEventListener('click',()=>{clearTimeout(debounce);refresh();});
+$('export-excel').addEventListener('click',()=>{
+  if (!latest) return;
+  const name = ['mycombo', $('kind').value, $('league').value || 'tutti', $('metric').value, $('layout').value].join('-').replace(/[^a-z0-9-]/gi,'_');
+  exportTable($('export-excel'), renderTable(true), name);
+});
 updateView();refresh();

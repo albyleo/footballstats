@@ -6,12 +6,13 @@ from functools import lru_cache
 from pathlib import Path
 import csv_stats
 import understat_stats
+from lineup_stats import season_lineups
 from score_audit import audit_match, score_value
 
 ROOT = Path(__file__).resolve().parents[1] / "data/providers/sportmonks"
 METRICS = {"shots-on-target": "Tiri in porta", "yellowcards": "Gialli",
-           "fouls": "Falli commessi", "assists": "Assist", "goals": "Gol",
-           "shots-total": "Tiri", "first-half-goals": "Gol primo tempo", "corners": "Calci d’angolo"}
+           "fouls": "Falli commessi", "fouls-drawn": "Falli subiti", "assists": "Assist", "goals": "Gol",
+           "shots-total": "Tiri totali", "first-half-goals": "Gol primo tempo", "corners": "Calci d’angolo"}
 
 
 def numeric(value):
@@ -109,6 +110,7 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
         raise ValueError("Tipo o metrica non valida")
     players, teams, warnings = dataset() if snapshot is None else (snapshot['players'], snapshot['teams'], snapshot['warnings'])
     players, teams, merge_warnings = understat_stats.merge_sources(players, teams)
+    lineups = season_lineups(players, teams) if kind == 'teams' else {}
     warnings = warnings + merge_warnings
     warnings = sorted(set(warnings + [issue for row in teams for issue in row.get('player_data_issues', [])]))
     selected = [r for r in (players if kind == "players" else teams)
@@ -148,7 +150,8 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
                        "starts": sum(r.get("starter", False) for r in rows) if kind == "players" else None,
                        "totals": totals, "coverage": coverage, "paired_minutes": paired_minutes,
                        "form": [r.get("outcome") for r in rows[:5]][::-1] if kind == "teams" else [],
-                       "same_starters": same_starters})
+                       "same_starters": same_starters,
+                       "season_lineup": lineups.get((first['provider'], first['league'], first['season'], first['team']))})
     if sort == "name":
         result.sort(key=lambda r: r["name"].casefold())
     else:

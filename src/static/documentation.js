@@ -17,6 +17,7 @@ function renderAudit() {
   const labels={verified:'Concordante',verified_with_warning:'HT concordante · avviso',source_only:'Campi HT · senza eventi',unverified:'Non verificabile',conflict:'Conflitto · escluso'};
   for(const audit of audits){const row=document.createElement('tr');cell(row,'td',audit.match,audit.date);cell(row,'td',sourceLabel(audit.provider));cell(row,'td',score(audit.ht));cell(row,'td',score(audit.ft));cell(row,'td',score(audit.events_ht));cell(row,'td',labels[audit.status],audit.issues.map(qualityLabel).join('; '));body.append(row);}
   table.append(body);$('half-table').replaceChildren(table);
+  $('export-audit').disabled=!audits.length;
   if(!audits.length){const p=document.createElement('p');p.className='empty';p.textContent='Nessun punteggio HT disponibile per questo campionato.';$('half-table').replaceChildren(p);}
 }
 // Audit filtering requests another cached local report; it never contacts a feed.
@@ -24,6 +25,7 @@ let auditGeneration=0;
 async function loadAudit() {
   const mine=++auditGeneration, league=$('audit-league').value;
   $('half-summary').textContent='Caricamento controlli…';$('half-table').replaceChildren();
+  $('export-audit').disabled=true;
   try {
     const response=await fetch('/api/providers/report?kind=teams&metric=first-half-goals&league='+encodeURIComponent(league),{cache:'no-cache'});
     if(!response.ok)throw new Error();
@@ -53,4 +55,5 @@ async function load() {
   }catch{$('docs-status').textContent='Copertura non disponibile: ricarica la pagina per riprovare. La metodologia rimane consultabile.';$('half-summary').textContent='Controlli non disponibili.';$('data-warnings').textContent='Stato dei controlli non disponibile.';}
 }
 $('audit-league').addEventListener('change',loadAudit);
+$('export-audit').addEventListener('click',()=>exportTable($('export-audit'),$('half-table').querySelector('table'),'mycombo-controlli-primo-tempo'));
 load();

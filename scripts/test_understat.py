@@ -26,6 +26,18 @@ def sample():
 
 
 class UnderstatTests(unittest.TestCase):
+    def test_new_leagues_have_stable_team_names(self):
+        for slug, league, code, original, normalized in [
+            ('Bundesliga', 'Bundesliga', 'D1', 'Borussia Dortmund', 'Dortmund'),
+            ('Ligue_1', 'Ligue 1', 'F1', 'Paris Saint Germain', 'Paris SG'),
+        ]:
+            self.assertEqual(stats.LEAGUES[slug], (code, league))
+            match, envelope = sample()
+            match['h']['title'] = original
+            players, teams = stats.match_rows(match, envelope, league, code, '2026/2027')
+            self.assertEqual(players[0]['team'], normalized)
+            self.assertEqual(teams[0]['league_id'], 'understat:' + code)
+
     def test_real_appearances_null_fouls_and_no_inferred_halftime(self):
         players, teams = stats.match_rows(*sample(), 'Serie A', 'I1', '2026/2027')
         self.assertEqual(players[0]['team'], 'Milan')

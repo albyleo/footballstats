@@ -8,7 +8,7 @@ import time
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1] / 'data/providers/understat'
-LEAGUES = ('Serie_A', 'EPL', 'La_liga')
+LEAGUES = ('Serie_A', 'EPL', 'La_liga', 'Bundesliga', 'Ligue_1')
 
 
 def save(path, value):
