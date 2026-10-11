@@ -5,6 +5,7 @@ from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
 import csv_stats
+import understat_stats
 from score_audit import audit_match, score_value
 
 ROOT = Path(__file__).resolve().parents[1] / "data/providers/sportmonks"
@@ -38,7 +39,7 @@ def catalog(root=ROOT):
 
 def input_revision(root=None, include_status=True):
     root = ROOT if root is None else root
-    paths = sorted(root.glob("match-*.json")) + sorted(root.glob("leagues-page-*.json")) + csv_stats.files()
+    paths = sorted(root.glob("match-*.json")) + sorted(root.glob("leagues-page-*.json")) + csv_stats.files() + understat_stats.files()
     if include_status and (root / "sync-status.json").exists():
         paths.append(root / "sync-status.json")
     signature = []
@@ -95,6 +96,10 @@ def _dataset(directory, signature):
     csv_rows, csv_warnings = csv_stats.load_rows(csv_stats.files())
     teams.extend(csv_rows)
     warnings.extend(csv_warnings)
+    extra_players, extra_teams, extra_warnings = understat_stats.load_rows()
+    players.extend(extra_players)
+    teams.extend(extra_teams)
+    warnings.extend(extra_warnings)
     return players, teams, warnings
 
 
@@ -103,6 +108,9 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
     if kind not in ("players", "teams") or metric not in METRICS or sort not in ("total", "per90", "minutes", "name"):
         raise ValueError("Tipo o metrica non valida")
     players, teams, warnings = dataset() if snapshot is None else (snapshot['players'], snapshot['teams'], snapshot['warnings'])
+    players, teams, merge_warnings = understat_stats.merge_sources(players, teams)
+    warnings = warnings + merge_warnings
+    warnings = sorted(set(warnings + [issue for row in teams for issue in row.get('player_data_issues', [])]))
     selected = [r for r in (players if kind == "players" else teams)
                 if (not league or r["league"] == league) and (not season or r["season"] == season)
                 and (not team or r["team"] == team)]
@@ -157,13 +165,16 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
             "matches": len({r["fixture"] for r in loaded}), "teams": len({r["id"] for r in loaded}),
             "players": len({r["id"] for r in players if r.get("league_id") == lid and (r["minutes"] or 0) > 0})})
     for code, (name, country) in csv_stats.LEAGUES.items():
-        loaded = [r for r in teams if r.get("league_id") == f"csv:{code}"]
+        loaded = [r for r in teams if r.get("league_id") in (f"csv:{code}", f"understat:{code}")]
+        individual = [r for r in players if r.get('league_id') == f'understat:{code}' and (r['minutes'] or 0) > 0]
         if loaded:
             coverage_cards.append({"id": f"csv:{code}", "name": name, "country": country,
-                "provider": "football-data.co.uk", "scope": "teams",
+                "provider": "Understat + football-data.co.uk" if individual else "football-data.co.uk", "scope": "players_and_teams" if individual else "teams",
                 "season": ", ".join(sorted({r["season"] for r in loaded})),
-                "matches": len({r["fixture"] for r in loaded}), "teams": len({r["id"] for r in loaded}),
-                "players": 0, "latest_match": max(r["date"] for r in loaded)})
+                "matches": len({r["fixture"] for r in loaded}), "teams": len({r["team"] for r in loaded}),
+                "players": len({r['id'] for r in individual}), "latest_match": max(r["date"] for r in loaded),
+                "player_matches": len({r['fixture'] for r in individual}),
+                "ht_matches": len({r['fixture'] for r in loaded if r['stats'].get('first-half-goals') is not None})})
     status_path = ROOT / "sync-status.json"
     sync = snapshot['sync'] if snapshot is not None else (json.loads(status_path.read_text(encoding="utf-8")) if status_path.exists() else None)
     audit_rows = {r["fixture"]: r["halftime_audit"] for r in teams if "halftime_audit" in r
@@ -179,6 +190,6 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
             "updated": max((r["fetched_at"] for r in selected), default=None),
             "warnings": warnings,
             "metric_coverage": {k: sum(r["stats"].get(k) is not None for r in selected) for k in METRICS},
-            "total_players": len({r["id"] for r in players if (r["minutes"] or 0) > 0}),
-            "total_teams": len({r["id"] for r in teams}),
+            "total_players": len({(r['provider'], r["id"]) for r in players if (r["minutes"] or 0) > 0}),
+            "total_teams": len({(r['league'], r['team']) for r in teams}),
             "availability": "Assenze e infortuni non acquisiti. Titolarità riferita solo alle partite del campione; nessuna stima di forma fisica."}

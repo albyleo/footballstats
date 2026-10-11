@@ -192,6 +192,25 @@ esclusi dal pacchetto web. Il vecchio file di appunti nella root è conservato.
 
 ## Test senza consumo di quota
 
+La home `/` presenta MyCombo SRL, con GSAP/ScrollTrigger 3.13.0 serviti
+localmente. `/providers` conserva l'osservatorio; i collegamenti dalla home
+possono preselezionare la vista giocatori o squadre. Le slide sono orizzontali
+su desktop e verticali su mobile; con `prefers-reduced-motion` o JavaScript
+disabilitato il contenuto resta leggibile senza animazioni. La vetrina non
+interroga il database o i feed.
+
+L'esploratore `/providers` separa Giocatori e Squadre tramite un selettore
+esplicito e filtri adattati alla vista. La documentazione dei feed, le schede
+di copertura e gli audit HT sono in `/documentation`. I nomi delle fonti
+integrative non sono mostrati nel testo pubblico: sono indicati come archivio
+integrativo, mantenendo intatti gli identificativi originali nel database e
+nelle risposte JSON. Nessun dato integrativo è attribuito alle API configurate.
+
+Serie A, Premier League e La Liga possono ora essere integrate con roster e
+statistiche per partita Understat, con cache e budget manuale. Definizioni,
+copertura effettiva, riconciliazione CSV e comandi:
+[docs/understat-coverage.md](docs/understat-coverage.md).
+
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m unittest discover -s scripts -p test_*.py

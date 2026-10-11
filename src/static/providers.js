@@ -1,121 +1,187 @@
 const ids = ['kind','metric','league','season','min_minutes','team','search','last_n','sort'];
-let generation = 0, page = 0, latest = null, debounce;
-const size = 30;
 const $ = id => document.getElementById(id);
 const display = value => value == null ? '—' : typeof value === 'number' ? value.toLocaleString('it-IT') : String(value);
+const formatDate = value => value ? value.split('-').reverse().join('.') : '—';
+let generation = 0, page = 0, latest = null, debounce, controller;
+const size = 30;
+const initial = new URLSearchParams(location.search);
+if (['players','teams'].includes(initial.get('kind'))) $('kind').value = initial.get('kind');
+if ([...$('metric').options].some(o => o.value === initial.get('metric'))) $('metric').value = initial.get('metric');
+for (const id of ['league','season','team']) {
+  const value=initial.get(id);
+  if(value&&value.length<=128){$(id).add(new Option(value,value));$(id).value=value;}
+}
+for (const id of ['sort','last_n']) {
+  if([...$(id).options].some(o=>o.value===initial.get(id)))$(id).value=initial.get(id);
+}
+if(initial.get('search')?.length<=128)$('search').value=initial.get('search');
+const initialMinutes=Number(initial.get('min_minutes'));
+if(Number.isInteger(initialMinutes)&&initialMinutes>=0&&initialMinutes<=100000)$('min_minutes').value=String(initialMinutes);
+
+function updateView() {
+  const player = $('kind').value === 'players';
+  $('view-players').setAttribute('aria-pressed', String(player));
+  $('view-teams').setAttribute('aria-pressed', String(!player));
+  $('view-kicker').textContent = player ? '01 / ANALISI INDIVIDUALE' : '02 / ANALISI COLLETTIVA';
+  $('view-title').textContent = player ? 'Esplora i giocatori' : 'Esplora le squadre';
+  $('view-description').textContent = player ? 'Gol, assist e prestazioni, una presenza alla volta.' : 'Produzione offensiva, risultati e continuità della formazione.';
+  $('view-badge').textContent = player ? 'VISTA GIOCATORI' : 'VISTA SQUADRE';
+  $('count-label').textContent = player ? 'Righe giocatore nel filtro' : 'Righe squadra nel filtro';
+  $('results-title').textContent = player ? 'Prestazioni dei giocatori' : 'Prestazioni delle squadre';
+  $('search-label').textContent = player ? 'Cerca giocatore' : 'Cerca squadra';
+  $('search').placeholder = player ? 'Nome o squadra del giocatore…' : 'Nome della squadra…';
+  $('minutes-filter').hidden = !player;
+  $('min_minutes').disabled = !player;
+  $('team-note').hidden = player;
+  for (const metric of ['first-half-goals','corners']) {
+    const option = $('metric').querySelector(`[value="${metric}"]`);
+    option.hidden = player;
+    if (player && $('metric').value === metric) $('metric').value = 'goals';
+  }
+  for (const value of ['per90','minutes']) {
+    $('sort').querySelector(`[value="${value}"]`).disabled = !player;
+    if (!player && $('sort').value === value) $('sort').value = 'total';
+  }
+  for (const n of [5,10]) $('last_n').querySelector(`[value="${n}"]`).textContent = `Ultime ${n} ${player ? 'presenze' : 'partite'}`;
+  $('layout').querySelector('[value="detail"]').textContent = player ? 'Dettaglio / per 90′' : 'Dettaglio / medie';
+  document.title = `${player ? 'Giocatori' : 'Squadre'} — MyCombo`;
+}
+
 function cell(row, tag, value, note) {
-  const e=document.createElement(tag);e.textContent=display(value);
-  if(note){const small=document.createElement('small');small.textContent=note;e.append(small);}
-  row.append(e);return e;
+  const element = document.createElement(tag);
+  element.textContent = display(value);
+  if (tag === 'th') element.scope = 'col';
+  if (note) { const small = document.createElement('small'); small.textContent = note; element.append(small); }
+  row.append(element);
+  return element;
 }
-function options(id, values){
-  const select=$(id), previous=select.value, placeholder=select.options[0].textContent;
-  select.replaceChildren(new Option(placeholder,''));
-  values.forEach(value=>select.add(new Option(value,value)));
-  select.value=values.includes(previous)?previous:'';
+function formCell(row, values) {
+  const element = cell(row, 'td', '');
+  const group = document.createElement('span'); group.className = 'form';
+  for (const value of values) {
+    const badge = document.createElement('span'); badge.textContent = value || '—';
+    badge.className = value === 'V' ? 'win' : value === 'S' ? 'loss' : '';
+    badge.title = {V:'Vittoria',P:'Pareggio',S:'Sconfitta'}[value] || 'Non disponibile';
+    group.append(badge);
+  }
+  element.append(group);
 }
-function renderTable(){
-  if(!latest)return;
-  const player=$('kind').value==='players', detail=$('layout').value==='detail';
-  const metric=$('metric').value, metricName=latest.metrics[metric];
-  const table=document.createElement('table'), head=document.createElement('thead'), header=document.createElement('tr');
-  const keys=(player?['shots-on-target','yellowcards','fouls','assists','goals']:['goals','first-half-goals','shots-on-target','fouls','yellowcards','corners','assists']).filter(k=>latest.metric_coverage[k]>0);
-  const columns=detail?
-    [player?'Giocatore':'Squadra','Campionato',metricName+' · rilevato',player?'Per 90′ osservati':'Media osservata',player?'Minuti osservati':'Partite con dato','Presenze / partite',player?'Minuti totali':'Ultimi risultati',player?'Da titolare':'Titolari confermati']:
-    [player?'Giocatore':'Squadra',player?'Squadra':'Campionato',...keys.map(k=>latest.metrics[k]),player?'Minuti':'Ultimi risultati','Presenze / partite',player?'Da titolare':'Titolari confermati'];
-  columns.forEach(v=>cell(header,'th',v));head.append(header);table.append(head);
-  const body=document.createElement('tbody');
-  page=Math.min(page,Math.max(0,Math.ceil(latest.rows.length/size)-1));
-  for(const row of latest.rows.slice(page*size,(page+1)*size)){
-    const tr=document.createElement('tr');
+function options(id, values) {
+  const select = $(id), previous = select.value, placeholder = select.options[0].textContent;
+  select.replaceChildren(new Option(placeholder, ''));
+  values.forEach(value => select.add(new Option(value, value)));
+  select.value = values.includes(previous) ? previous : '';
+}
+function renderTable() {
+  if (!latest) return;
+  const player = $('kind').value === 'players', detail = $('layout').value === 'detail';
+  const metric = $('metric').value, metricName = latest.metrics[metric];
+  const defaults = player ? ['goals','assists','shots-on-target','yellowcards','fouls'] : ['goals','first-half-goals','shots-on-target','yellowcards','fouls','corners'];
+  const keys = [...new Set([metric, ...defaults])].filter(k => latest.metric_coverage[k] > 0);
+  const table = document.createElement('table'), head = document.createElement('thead'), header = document.createElement('tr');
+  const caption = document.createElement('caption'); caption.className = 'sr-only'; caption.textContent = `${player ? 'Giocatori' : 'Squadre'}: ${metricName}`; table.append(caption);
+  const columns = detail ? [player?'Giocatore':'Squadra','Campionato',metricName,player?'Per 90′ osservati':'Media per partita',player?'Minuti osservati':'Partite con dato',player?'Presenze':'Partite',player?'Minuti totali':'Ultimi risultati',player?'Da titolare':'Titolari in comune'] : [player?'Giocatore':'Squadra',player?'Squadra':'Campionato',...keys.map(k=>latest.metrics[k]),player?'Minuti':'Ultimi risultati',player?'Presenze':'Partite',player?'Da titolare':'Titolari in comune'];
+  columns.forEach(value => cell(header, 'th', value)); head.append(header); table.append(head);
+  const body = document.createElement('tbody');
+  page = Math.min(page, Math.max(0, Math.ceil(latest.rows.length/size)-1));
+  for (const row of latest.rows.slice(page*size,(page+1)*size)) {
+    const tr = document.createElement('tr');
     cell(tr,'td',row.name,player&&detail?row.team:null);
-    cell(tr,'td',player&&!detail?row.team:row.league,player&&!detail?row.league:`${row.season} · ${row.provider}`);
-    if(detail){
-      cell(tr,'td',row.total,`${row.covered}/${row.matches} con dato`);
+    cell(tr,'td',player&&!detail?row.team:row.league,player&&!detail?row.league:row.season);
+    if (detail) {
+      cell(tr,'td',row.total,`${row.covered}/${row.matches} con dato`).className='metric-cell';
       cell(tr,'td',player?row.per90:row.per_match,row.covered<row.matches?'Copertura parziale':null);
       cell(tr,'td',player?row.paired_minutes:row.covered);
       cell(tr,'td',row.matches);
-      cell(tr,'td',player?row.minutes:row.form.map(v=>v||'—').join(' '));
-    }else{
-      keys.forEach(k=>cell(tr,'td',row.totals[k],`${row.coverage[k]}/${row.matches} con dato`));
-      cell(tr,'td',player?row.minutes:row.form.map(v=>v||'—').join(' '));
+      if (player) cell(tr,'td',row.minutes); else formCell(tr,row.form);
+    } else {
+      keys.forEach(k=> {const c=cell(tr,'td',row.totals[k],`${row.coverage[k]}/${row.matches} con dato`);if(k===metric)c.className='metric-cell';});
+      if (player) cell(tr,'td',row.minutes); else formCell(tr,row.form);
       cell(tr,'td',row.matches);
     }
     cell(tr,'td',player?row.starts:row.same_starters==null?null:`${row.same_starters}/11`);
     body.append(tr);
   }
-  table.append(body);$('table').replaceChildren(table);
-  if(!latest.rows.length){const p=document.createElement('p');p.className='empty';p.textContent=player&&latest.catalog.find(c=>c.name===$('league').value)?.scope==='teams'?'Per questo campionato il feed fornisce solo dati di squadra. Seleziona la vista Squadre.':'Nessuna riga per questi filtri. Prova a ridurre i minuti minimi o cambiare squadra.';$('table').append(p);}
-  $('pagination').textContent=`${latest.rows.length? page*size+1:0}–${Math.min((page+1)*size,latest.rows.length)} di ${latest.rows.length}`;
-  $('prev').disabled=page===0;$('next').disabled=(page+1)*size>=latest.rows.length;
+  table.append(body); $('table').replaceChildren(table);
+  if (!latest.rows.length) {
+    const p=document.createElement('p');p.className='empty';
+    p.textContent=player&&latest.catalog.find(c=>c.name===$('league').value)?.scope==='teams'?'Questo campionato contiene solo statistiche di squadra. Apri la vista Squadre per esplorarle.':'Nessun risultato. Prova ad ampliare i filtri o azzerarli.';
+    $('table').replaceChildren(p);
+  }
+  $('pagination').textContent=`${latest.rows.length?page*size+1:0}–${Math.min((page+1)*size,latest.rows.length)} di ${display(latest.rows.length)}`;
+  $('prev').disabled=page===0; $('next').disabled=(page+1)*size>=latest.rows.length;
   const known=latest.rows.filter(r=>r.covered>0).length;
-  $('quality').textContent=`Ordine: ${$('sort').selectedOptions[0].textContent} · ${metricName}. ${known}/${latest.rows.length} righe hanno almeno un valore per questa statistica. ${Number($('last_n').value)?'Periodo limitato alle ultime '+$('last_n').value+' presenze/partite caricate.':''}`;
+  $('quality').textContent=`${metricName} · ${display(known)}/${display(latest.rows.length)} righe con dati. ${Number($('last_n').value)?'Ultime '+$('last_n').value+(player?' presenze caricate.':' partite caricate.'):'Intero campione caricato.'}`;
 }
-async function refresh(){
-  const mine=++generation;
-  const params=new URLSearchParams(ids.map(id=>[id,$(id).value]));
-  $('status').textContent='Caricamento dati locali…';
-  $('reload').disabled=true;
-  try{
-    const response=await fetch('/api/providers/report?'+params,{cache:'no-cache'});
-    const data=await response.json();if(mine!==generation)return;
-    if(!response.ok)throw new Error(data.error||'Errore caricamento');
-    for(const option of $('metric').options){
-      const unavailable=($('kind').value==='players'&&option.value==='first-half-goals')||!data.metric_coverage[option.value];
-      option.disabled=unavailable;
-      option.textContent=data.metrics[option.value]+(unavailable?' · non disponibile':'');
+
+async function refresh() {
+  const mine = ++generation;
+  controller?.abort(); controller = new AbortController();
+  const minutes=Number($('min_minutes').value);
+  $('min_minutes').value=String(Number.isFinite(minutes)?Math.max(0,Math.min(100000,Math.floor(minutes))):0);
+  const params = new URLSearchParams(ids.map(id=>[id,$(id).value]));
+  if ($('kind').value==='teams') params.set('min_minutes','0');
+  history.replaceState(null,'','/providers?'+params);
+  latest=null; $('table').replaceChildren(); $('table').setAttribute('aria-busy','true');
+  $('status').textContent='Caricamento archivio…'; $('quality').textContent=''; $('pagination').textContent='—';
+  $('reload').disabled=true; $('prev').disabled=true; $('next').disabled=true;
+  for(const id of ['count-rows','count-matches','count-latest','count-seasons']) $(id).textContent='—';
+  $('data-warnings').hidden=true; $('dates').textContent='';
+  try {
+    const response=await fetch('/api/providers/report?'+params,{cache:'no-cache',signal:controller.signal});
+    const data=await response.json(); if(mine!==generation)return;
+    if(!response.ok)throw new Error(data.error||'Archivio non disponibile');
+    for(const option of $('metric').options) {
+      const unavailable=option.hidden||!data.metric_coverage[option.value];
+      option.disabled=unavailable; option.textContent=data.metrics[option.value]+(unavailable?' · non disponibile':'');
     }
-    if($('metric').selectedOptions[0].disabled){
+    if($('metric').selectedOptions[0].disabled) {
       const first=[...$('metric').options].find(o=>!o.disabled);
       if(first){$('metric').value=first.value;return refresh();}
     }
-    latest=data;page=0;
+    latest=data; page=0;
     options('league',data.leagues);options('season',data.seasons);options('team',data.teams);
-    $('catalog').replaceChildren();
-    for(const entry of data.catalog){
-      const card=document.createElement('div');card.className='coverage-card';
-      const name=document.createElement('div');name.textContent=`${entry.country} · ${entry.name}`;
-      const count=document.createElement('strong');count.textContent=`${entry.matches} partite`;
-      const info=document.createElement('small');info.textContent=entry.matches?`${entry.teams} squadre · ${entry.scope==='teams'?'solo squadre':entry.players+' giocatori'} · ${entry.season||'—'}`:`Accessibile · nessuna partita caricata${entry.season?' · '+entry.season:''}`;
-      const source=document.createElement('p');source.className='muted';source.textContent=`${entry.provider} · ultima partita: ${entry.latest_match||'—'}`;
-      card.append(name,count,info,source);$('catalog').append(card);
+    $('count-rows').textContent=display(data.rows.length);
+    $('count-matches').textContent=display(data.fixtures);
+    $('count-latest').textContent=formatDate(data.dates.at(-1));
+    $('count-seasons').textContent=display(new Set(data.rows.map(r=>r.season)).size);
+    $('status').textContent=`${display(data.rows.length)} risultati · ${display(data.fixtures)} partite nel campione`;
+    $('dates').textContent=data.dates.length?`Campione: ${formatDate(data.dates[0])} → ${formatDate(data.dates.at(-1))} · Acquisizione: ${new Date(data.updated).toLocaleString('it-IT')}`:'Nessuna partita nel campione selezionato.';
+    if(data.warnings?.length) {
+      $('data-warnings').textContent=`${data.warnings.length} avviso/i di qualità nell’archivio. I dati incoerenti vengono esclusi; consulta la documentazione per i dettagli.`;
+      const link=document.createElement('a');link.href='/documentation#qualita';link.textContent=' Vedi controlli ↗';$('data-warnings').append(link);$('data-warnings').hidden=false;
     }
-    $('sync').textContent=data.sync?`Ultima acquisizione Sportmonks: ${data.sync.start} → ${data.sync.end} · ${data.sync.fixtures} partite · ${data.sync.network_requests} chiamate · ${data.sync.complete?'tutte le pagine ricevute':'acquisizione parziale'}`:'';
-    $('status').textContent=`${data.fixtures} partite nel filtro · ${data.rows.length} righe · archivio: ${data.total_teams} squadre / ${data.total_players} giocatori`;
-    $('dates').textContent=data.dates.length?`Archivio filtrato: ${data.dates[0]} → ${data.dates.at(-1)} · Dati acquisiti: ${new Date(data.updated).toLocaleString('it-IT')}`:'Nessuna partita conclusa scaricata.';
-    $('availability').textContent=data.availability;
-    const audits=data.halftime_audit||[], verified=audits.filter(a=>a.status.startsWith('verified')).length;
-    const sourceOnly=audits.filter(a=>a.status==='source_only').length, conflicts=audits.filter(a=>a.status==='conflict').length;
-    $('half-summary').textContent=`${verified} partite: HT concordante con gli eventi · ${sourceOnly}: fonte CSV, senza eventi · ${conflicts}: conflitti HT · ${audits.filter(a=>a.status==='verified_with_warning').length}: avvisi su altri campi. Controllo sull’archivio filtrato, prima del limite ultime 5/10.`;
-    const auditTable=document.createElement('table'), auditHead=document.createElement('tr');
-    ['Data / partita','Fonte','Intervallo','Finale','HT dagli eventi','Esito'].forEach(v=>cell(auditHead,'th',v));
-    auditTable.append(auditHead);
-    const score=v=>v?v.map(display).join('–'):'—';
-    const labels={verified:'Concordante',verified_with_warning:'HT concordante · avviso',source_only:'Fonte CSV · senza eventi',unverified:'Non verificabile',conflict:'Conflitto · escluso'};
-    for(const audit of audits){const tr=document.createElement('tr');cell(tr,'td',audit.match,audit.date);cell(tr,'td',audit.provider);cell(tr,'td',score(audit.ht));cell(tr,'td',score(audit.ft));cell(tr,'td',score(audit.events_ht));cell(tr,'td',labels[audit.status],audit.issues.join('; '));auditTable.append(tr);}
-    $('half-table').replaceChildren(auditTable);
+    $('docs-link').href='/documentation'+($('league').value?'?league='+encodeURIComponent($('league').value):'');
     renderTable();
-  }catch(error){if(mine===generation){latest=null;$('status').textContent=error.message;$('table').replaceChildren();$('pagination').textContent='';}}
-  finally{if(mine===generation)$('reload').disabled=false;}
+  } catch(error) {
+    if(mine===generation && error.name!=='AbortError') {
+      $('status').textContent=error.message;
+      const p=document.createElement('p');p.className='empty';p.textContent='Impossibile caricare i dati. Usa “Rileggi archivio” per riprovare.';$('table').replaceChildren(p);
+    }
+  } finally {if(mine===generation){$('reload').disabled=false;$('table').setAttribute('aria-busy','false');}}
 }
-ids.filter(id=>id!=='search').forEach(id=>$(id).addEventListener('change',()=>{
-  if(id==='league'){
-    $('team').value='';
-    if(latest?.catalog.find(c=>c.name===$('league').value)?.scope==='teams')$('kind').value='teams';
-  }
-  const player=$('kind').value==='players';
-  $('min_minutes').disabled=!player;
-  $('sort').querySelector('[value="per90"]').disabled=!player;
-  $('sort').querySelector('[value="minutes"]').disabled=!player;
-  $('metric').querySelector('[value="first-half-goals"]').disabled=player;
-  if(!player&&['per90','minutes'].includes($('sort').value))$('sort').value='total';
-  if(player&&$('metric').value==='first-half-goals')$('metric').value='goals';
-  refresh();
+
+document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>{
+  if($('kind').value===button.dataset.view)return;
+  clearTimeout(debounce);$('kind').value=button.dataset.view;$('search').value='';updateView();refresh();
 }));
+ids.filter(id=>!['kind','search'].includes(id)).forEach(id=>$(id).addEventListener('change',()=>{
+  clearTimeout(debounce);
+  if(id==='league')$('team').value='';
+  if(id==='min_minutes') {
+    const minutes=Number($('min_minutes').value);
+    $('min_minutes').value=String(Number.isFinite(minutes)?Math.max(0,Math.min(100000,Math.floor(minutes))):0);
+  }
+  updateView();refresh();
+}));
+$('reset').addEventListener('click',()=>{
+  clearTimeout(debounce);for(const id of ['league','season','team','search'])$(id).value='';
+  $('min_minutes').value='0';$('last_n').value='0';$('sort').value='total';$('metric').value=$('kind').value==='players'?'shots-on-target':'goals';updateView();refresh();
+});
 $('search').addEventListener('input',()=>{clearTimeout(debounce);debounce=setTimeout(refresh,250);});
+$('min_minutes').addEventListener('input',()=>{clearTimeout(debounce);debounce=setTimeout(refresh,400);});
 $('layout').addEventListener('change',renderTable);
-$('prev').addEventListener('click',()=>{page--;renderTable();});
-$('next').addEventListener('click',()=>{page++;renderTable();});
-$('reload').addEventListener('click',refresh);
-$('metric').querySelector('[value="first-half-goals"]').disabled=true;
-refresh();
+$('prev').addEventListener('click',()=>{page--;renderTable();$('table').scrollTop=0;});
+$('next').addEventListener('click',()=>{page++;renderTable();$('table').scrollTop=0;});
+$('reload').addEventListener('click',()=>{clearTimeout(debounce);refresh();});
+updateView();refresh();

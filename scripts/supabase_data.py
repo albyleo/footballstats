@@ -131,6 +131,10 @@ def main():
             snapshot = local_snapshot()
             print(json.dumps(counts(snapshot)))
             print('Avvisi:', len(snapshot['warnings']))
+            report = provider_stats.report('teams', 'goals', snapshot=snapshot)
+            print('Partite distinte nel report (fonti riconciliate):', report['fixtures'])
+            for warning in report['warnings']:
+                print('Qualità dati:', warning)
             if args.action == 'import':
                 with connect('FOOTBALL_IMPORT_DATABASE_URL') as conn:
                     import_snapshot(conn, snapshot)

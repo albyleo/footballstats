@@ -89,10 +89,15 @@ class CacheTests(unittest.TestCase):
             self.assertEqual(build.call_count, 2)
             self.assertEqual(client.get(url + "&search=Arsenal").headers["x-report-cache"], "MISS")
             self.assertEqual(client.get(url + "&search=" + "a" * 129).status_code, 400)
-            self.assertEqual(client.get("/").content, client.get("/providers").content)
+            before_home = build.call_count
+            home, dashboard = client.get("/"), client.get("/providers")
+            self.assertEqual(home.status_code, 200)
+            self.assertIn('MyCombo SRL', home.text)
+            self.assertNotEqual(home.content, dashboard.content)
+            self.assertEqual(build.call_count, before_home)
             for path in ("/api/query", "/api/leaderboard"):
                 self.assertEqual(client.post(path, json={"sql": "SELECT 1"}).status_code, 404)
-            for path in ("/api/meta", "/api/find_team", "/static/app.js", "/static/index.html"):
+            for path in ("/api/meta", "/api/find_team", "/static/app.js"):
                 self.assertEqual(client.get(path).status_code, 404)
 
     def test_web_import_and_start_without_duckdb_or_mcp(self):

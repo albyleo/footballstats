@@ -29,6 +29,14 @@ async def provider_page(request):
     return FileResponse(STATIC / "providers.html", headers={"Cache-Control": "no-cache"})
 
 
+async def home_page(request):
+    return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
+
+
+async def documentation_page(request):
+    return FileResponse(STATIC / "documentation.html", headers={"Cache-Control": "no-cache"})
+
+
 async def provider_report(request):
     p = request.query_params
     try:
@@ -66,8 +74,9 @@ async def provider_report(request):
 
 
 app = Starlette(routes=[
-    Route("/", provider_page),
+    Route("/", home_page),
     Route("/providers", provider_page),
+    Route("/documentation", documentation_page),
     Route("/api/providers/report", provider_report),
     Mount("/static", StaticFiles(directory=STATIC), name="static"),
 ])
