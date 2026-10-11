@@ -2,6 +2,7 @@
 from collections import defaultdict
 from datetime import date
 import json
+import math
 from pathlib import Path
 
 from score_audit import goal_count
@@ -31,6 +32,17 @@ def files(root=ROOT):
 
 def name(league, value):
     return ALIASES.get(league, {}).get(value, value)
+
+
+def expected(value):
+    """Expected metrics are nonnegative decimals; missing is not zero."""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+        return number if math.isfinite(number) and number >= 0 else None
+    except (TypeError, ValueError):
+        return None
 
 
 def match_rows(match, envelope, league, code, season):
@@ -73,6 +85,15 @@ def match_rows(match, envelope, league, code, season):
             valid = (stats['shots-total'] == len(shots) and
                      all(s['result'] in {'Goal', 'SavedShot', 'MissedShots', 'BlockedShot', 'ShotOnPost'} for s in shots))
             stats['shots-on-target'] = sum(s['result'] in {'Goal', 'SavedShot'} for s in shots) if valid else None
+            stats.update({key: expected(p.get(field)) for key, field in
+                          [('xg', 'xG'), ('xa', 'xA'), ('xg-chain', 'xGChain'), ('xg-buildup', 'xGBuildup')]})
+            stats['key-passes'] = goal_count(p.get('key_passes'))
+            stats['goals-minus-xg'] = stats['goals'] - stats['xg'] if stats['goals'] is not None and stats['xg'] is not None else None
+            shot_xg = [expected(s.get('xG')) for s in shots]
+            consistent = (valid and None not in shot_xg and stats['xg'] is not None
+                          and abs(sum(shot_xg) - stats['xg']) < 0.0001
+                          and all(s.get('situation') in {'OpenPlay','FromCorner','SetPiece','DirectFreekick','Penalty'} for s in shots))
+            stats['npxg'] = sum(x for s, x in zip(shots, shot_xg) if s['situation'] != 'Penalty') if consistent else None
             row = dict(**base, id='understat:' + str(p['player_id']), name=p['player'], team=team,
                        team_id=tid, minutes=goal_count(p.get('time')), starter=p.get('position') != 'Sub',
                        stats=stats, metric_sources={'shots-on-target': 'Understat shots: Goal + SavedShot; total checked'})
@@ -84,6 +105,12 @@ def match_rows(match, envelope, league, code, season):
         team_stats = {'goals': ft[side],
                       'shots-total': len(data['shots'][side]) if complete_shots else None,
                       'shots-on-target': sum(p['stats']['shots-on-target'] for p in side_players) if complete_shots else None}
+        team_stats['xg'] = expected((match.get('xG') or {}).get(side))
+        team_stats['xga'] = expected((match.get('xG') or {}).get(other))
+        team_stats['xgd'] = team_stats['xg'] - team_stats['xga'] if None not in (team_stats['xg'], team_stats['xga']) else None
+        team_stats['goals-minus-xg'] = ft[side] - team_stats['xg'] if team_stats['xg'] is not None else None
+        values = [p['stats']['npxg'] for p in side_players]
+        team_stats['npxg'] = sum(values) if complete_shots and None not in values else None
         teams.append(dict(**base, id=tid, name=team, team=team,
                           opponent=name(league, match[other]['title']), stats=team_stats,
                           outcome='V' if ft[side] > ft[other] else 'P' if ft[side] == ft[other] else 'S',

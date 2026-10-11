@@ -1,6 +1,6 @@
 const ids = ['kind','metric','league','season','min_minutes','team','search','last_n','sort'];
 const $ = id => document.getElementById(id);
-const display = value => value == null ? '—' : typeof value === 'number' ? value.toLocaleString('it-IT') : String(value);
+const display = value => value == null ? '—' : typeof value === 'number' ? value.toLocaleString('it-IT', {maximumFractionDigits: 2}) : String(value);
 const formatDate = value => value ? value.split('-').reverse().join('.') : '—';
 let generation = 0, page = 0, latest = null, debounce, controller;
 const size = 30;
@@ -33,10 +33,15 @@ function updateView() {
   $('minutes-filter').hidden = !player;
   $('min_minutes').disabled = !player;
   $('team-note').hidden = player;
-  for (const metric of ['first-half-goals','corners','goals-conceded']) {
+  for (const metric of ['first-half-goals','corners','goals-conceded','xga','xgd']) {
     const option = $('metric').querySelector(`[value="${metric}"]`);
     option.hidden = player;
     if (player && $('metric').value === metric) $('metric').value = 'goals';
+  }
+  for (const metric of ['xa','key-passes','xg-chain','xg-buildup']) {
+    const option = $('metric').querySelector(`[value="${metric}"]`);
+    option.hidden = !player;
+    if (!player && $('metric').value === metric) $('metric').value = 'xg';
   }
   for (const value of ['per90','minutes']) {
     $('sort').querySelector(`[value="${value}"]`).disabled = !player;
@@ -96,12 +101,12 @@ function renderTable(all = false) {
   if (!latest) return;
   const player = $('kind').value === 'players', detail = $('layout').value === 'detail';
   const metric = $('metric').value, metricName = latest.metrics[metric];
-  const defaults = player ? ['goals','assists','shots-on-target','shots-total','yellowcards','fouls','fouls-drawn'] : ['goals','goals-conceded','first-half-goals','shots-on-target','shots-total','yellowcards','fouls','corners'];
+  const defaults = player ? ['goals','xg','assists','xa','shots-on-target','shots-total','yellowcards','fouls','fouls-drawn'] : ['goals','xg','goals-conceded','xga','first-half-goals','shots-on-target','shots-total','yellowcards','fouls','corners'];
   const keys = [...new Set([metric, ...defaults])].filter(k => latest.metric_coverage[k] > 0 || ['fouls-drawn','shots-total','goals-conceded'].includes(k));
   const table = document.createElement('table'), head = document.createElement('thead'), header = document.createElement('tr');
   const caption = document.createElement('caption'); caption.className = 'sr-only'; caption.textContent = `${player ? 'Giocatori' : 'Squadre'}: ${metricName}`; table.append(caption);
   const columns = detail ? [player?'Giocatore':'Squadra','Campionato',metricName,player?'Per 90′ osservati':'Media per partita',player?'Minuti osservati':'Partite con dato',player?'Presenze':'Partite',player?'Minuti totali':'Ultimi risultati',player?'Da titolare':'Base titolare stagionale'] : [player?'Giocatore':'Squadra',player?'Squadra':'Campionato',...keys.map(k=>latest.metrics[k]),player?'Minuti':'Ultimi risultati',player?'Presenze':'Partite',player?'Da titolare':'Base titolare stagionale'];
-  if (!player) columns.push('Prossima partita / base');
+  if (!player) {columns.splice(2,0,'Posizione in classifica');columns.push('Prossima partita / base');}
   columns.forEach(value => cell(header, 'th', value)); head.append(header); table.append(head);
   const body = document.createElement('tbody');
   page = Math.min(page, Math.max(0, Math.ceil(latest.rows.length/size)-1));
@@ -109,6 +114,11 @@ function renderTable(all = false) {
     const tr = document.createElement('tr');
     cell(tr,'td',row.name,player&&detail?row.team:null);
     cell(tr,'td',player&&!detail?row.team:row.league,player&&!detail?row.league:row.season);
+    if (!player) {
+      const standing=row.standing;
+      const note=standing ? `${standing.points == null ? '' : standing.points+' punti · '}${standing.source} · rilevata ${formatDate(standing.fetched_at?.slice(0,10))}${standing.stage ? ' · '+standing.stage : ''}${standing.group ? ' · '+standing.group : ''}` : 'Classifica ufficiale non disponibile nel feed';
+      cell(tr,'td',standing ? `${standing.position}°` : null,note);
+    }
     if (detail) {
       cell(tr,'td',row.total,`${row.covered}/${row.matches} con dato`).className='metric-cell';
       cell(tr,'td',player?row.per90:row.per_match,row.covered<row.matches?'Copertura parziale':null);

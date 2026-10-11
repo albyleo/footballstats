@@ -6,11 +6,15 @@ from functools import lru_cache
 from pathlib import Path
 import csv_stats
 import understat_stats
+import standings
 from lineup_stats import season_lineups
 from score_audit import audit_match, score_value
 
 ROOT = Path(__file__).resolve().parents[1] / "data/providers/sportmonks"
 METRICS = {"shots-on-target": "Tiri in porta", "yellowcards": "Gialli",
+           "xg": "xG", "xa": "xA", "npxg": "npxG", "xga": "xG subiti", "xgd": "Differenza xG",
+           "goals-minus-xg": "Gol − xG", "key-passes": "Passaggi chiave",
+           "xg-chain": "xGChain", "xg-buildup": "xGBuildup",
            "fouls": "Falli commessi", "fouls-drawn": "Falli subiti", "assists": "Assist", "goals": "Gol",
            "shots-total": "Tiri totali", "goals-conceded": "Gol subiti", "first-half-goals": "Gol primo tempo", "corners": "Calci d’angolo"}
 
@@ -40,7 +44,7 @@ def catalog(root=ROOT):
 
 def input_revision(root=None, include_status=True):
     root = ROOT if root is None else root
-    paths = sorted(root.glob("match-*.json")) + sorted(root.glob("leagues-page-*.json")) + csv_stats.files() + understat_stats.files()
+    paths = sorted(root.glob("match-*.json")) + sorted(root.glob("leagues-page-*.json")) + sorted(root.glob("standings-*.json")) + standings.files() + csv_stats.files() + understat_stats.files()
     if include_status and (root / "sync-status.json").exists():
         paths.append(root / "sync-status.json")
     signature = []
@@ -124,6 +128,7 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
         raise ValueError("Tipo o metrica non valida")
     players, teams, warnings = dataset() if snapshot is None else (snapshot['players'], snapshot['teams'], snapshot['warnings'])
     players, teams, merge_warnings = understat_stats.merge_sources(players, with_goals_conceded(teams))
+    league_positions = standings.index(standings.load() if snapshot is None else snapshot.get('standings', {})) if kind == 'teams' else {}
     lineups = season_lineups(players, teams) if kind == 'teams' else {}
     warnings = warnings + merge_warnings
     warnings = sorted(set(warnings + [issue for row in teams for issue in row.get('player_data_issues', [])]))
@@ -156,6 +161,7 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
         if kind == "teams" and len(rows) >= 2 and all(len(r.get("starters", [])) == 11 for r in rows[:2]):
             same_starters = len(set(rows[0]["starters"]) & set(rows[1]["starters"]))
         result.append({"name": first["name"], "team": first["team"], "league": first["league"],
+                       "standing": standings.lookup(league_positions, first),
                        "provider": first["provider"],
                        "season": first["season"], "matches": len(rows), "covered": len(known),
                        "minutes": minutes, "total": total,

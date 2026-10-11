@@ -10,7 +10,7 @@ disabilitato dopo 60 giorni senza attività. Non è un servizio real-time.
 1. Applicare `supabase/migrations/202610110002_sync_jobs.sql` come amministratore.
 2. Dal checkout con i dati acquisiti: `python scripts/scheduled_sync.py --seed-cache`.
 3. Nei repository Actions secrets aggiungere `FOOTBALL_IMPORT_DATABASE_URL`
-   (importer, Session pooler, porta 5432, TLS) e `SPORTMONKS_TOKEN`.
+   (importer, Session pooler, porta 5432, TLS), `SPORTMONKS_TOKEN` e `FOOTBALL_DATA_ORG`.
    Non usare le credenziali amministrative nel workflow.
 4. Pubblicare codice e workflow sul branch predefinito `main`.
 5. Actions > Update football archive > Run workflow. Selezionare
@@ -31,11 +31,19 @@ dopo ogni importazione e i visitatori non eseguono download dai provider.
 - Cinque cataloghi Understat della stagione luglio-giugno; i dettagli vengono
   scaricati se mancanti, oppure ricontrollati per le partite degli ultimi
   sette giorni. La cache JSON Understat ha una freschezza minima di 24 ore.
-- Cinque CSV della stagione, salvati solo se il contenuto cambia.
+- Sei CSV della stagione, salvati solo se il contenuto cambia.
 - Sportmonks: catalogo e partite concluse di Superliga/Premiership negli ultimi
   sette giorni, estesi all'ultima acquisizione riuscita in caso di interruzione.
   Oltre 99 giorni di interruzione occorre un recupero manuale a finestre.
 - API-Football non viene interrogata: l'account risultava sospeso.
+- football-data.org: sei classifiche correnti (SA, PL, PD, BL1, FL1, PPL),
+  autenticazione X-Auth-Token da `FOOTBALL_DATA_ORG`. Una richiesta per
+  campionato, cache 24 ore, almeno 7 secondi tra richieste e tetto condiviso
+  12 al giorno. Con due esecuzioni settimanali normali: 12 chiamate/settimana.
+  Si accetta solo una tabella TOTAL/REGULAR_SEASON della stagione prevista;
+  le posizioni non vengono ricalcolate. Nomi equivalenti espliciti e verificati,
+  mai fuzzy matching. Classifiche conservate per stagione in Supabase.
+  Questa chiave serve sul job, non su Vercel. Nessuna nuova migrazione SQL.
 - Pausa minima di tre secondi fra richieste; niente retry automatici.
 - Budget massimo giornaliero condiviso: Understat 250, CSV 6, Sportmonks 20.
   Sono tetti, non obiettivi di consumo. Anche richieste fallite consumano budget.
@@ -51,6 +59,16 @@ dopo ogni importazione e i visitatori non eseguono download dai provider.
   condivide lo stato di blocco e il budget Supabase.
 - Il CSV `P1` (Primeira Liga) è incluso nella cache e nel job. Fornisce solo
   statistiche di squadra, non osservazioni sui singoli giocatori.
+- Classifiche: il job scarica anche `/standings/seasons/{id}` per le stagioni
+  correnti di Superliga e Premiership (massimo due chiamate aggiuntive, nello
+  stesso budget Sportmonks). Cache 24 ore, file `standings-<id>.json`, copie
+  persistenti in sync_cache e dataset_state.metadata.standings. Una variazione
+  di classifica aggiorna la revisione anche senza modifiche alle partite.
+  `--standings-only` aggiorna soltanto queste risposte e importa l'archivio
+  locale ripristinato, senza download Understat/CSV e senza avanzare last_success
+  dell'acquisizione completa. La vista usa posizione, campionato, stagione e
+  squadra del provider; nessun ricalcolo sui filtri. Dati assenti o più fasi
+  ambigue danno “—”, mai una classifica stimata. Nessuna migrazione SQL richiesta.
 
 ## Solo dati cambiati
 

@@ -24,8 +24,8 @@ import fetch_provider
 from fetch_football_data import _looks_like_csv
 from psycopg.types.json import Jsonb
 
-LIMITS = {'understat': 250, 'csv': 6, 'sportmonks': 20}
-ALLOWED = re.compile(r'data/(?:raw/(?:I1|E0|SP1|D1|F1|P1)_20\d\d-\d\d\.csv|providers/understat/(?:league-[A-Za-z_]+-\d{4}|match-\d+)\.json|providers/sportmonks/(?:match-\d+|leagues-page-\d+|sync-status)\.json)\Z')
+LIMITS = {'understat': 250, 'csv': 6, 'sportmonks': 20, 'football-data.org': 12}
+ALLOWED = re.compile(r'data/(?:providers/football-data-org/standings-(?:SA|PL|PD|BL1|FL1|PPL)-\d{4}\.json|raw/(?:I1|E0|SP1|D1|F1|P1)_20\d\d-\d\d\.csv|providers/understat/(?:league-[A-Za-z_]+-\d{4}|match-\d+)\.json|providers/sportmonks/(?:match-\d+|leagues-page-\d+|standings-\d+|sync-status)\.json)\Z')
 
 
 def utcnow():
@@ -92,7 +92,7 @@ class Store:
 
     def fetch(self, provider, url, headers=None):
         self.reserve(provider)
-        delay = 3 - (time.monotonic() - self.last_request)
+        delay = (7 if provider == 'football-data.org' else 3) - (time.monotonic() - self.last_request)
         if delay > 0:
             time.sleep(delay)
         self.last_request = time.monotonic()
@@ -180,12 +180,42 @@ def download(store, season):
     store.set('checked:sportmonks',time.time())
 
 
+def download_standings(store):
+    import provider_stats
+    token = os.environ.get('SPORTMONKS_TOKEN')
+    if not token:
+        raise ValueError('SPORTMONKS_TOKEN required')
+    client = fetch_provider.Client('sportmonks', 0)
+    for league in provider_stats.catalog().values():
+        season = league.get('currentseason') or {}
+        if league['id'] not in (271, 501) or not season.get('id') or season.get('pending'):
+            continue
+        sid = int(season['id'])
+        path = ROOT / f'data/providers/sportmonks/standings-{sid}.json'
+        if path.exists() and time.time() - path.stat().st_mtime < 86400:
+            continue
+        url = client.base + f'/standings/seasons/{sid}?include=season;stage;group'
+        payload = json.loads(store.fetch('sportmonks', url,
+            {'Authorization': token, 'Accept': 'application/json', 'User-Agent': 'MyComboDataSync/1.0'}))
+        rows = payload.get('data') if isinstance(payload, dict) else None
+        if (not isinstance(payload, dict) or payload.get('error') or payload.get('errors') or not isinstance(rows, list)
+                or not rows or payload.get('pagination', {}).get('has_more')
+                or any(r.get('season_id') != sid or r.get('league_id') != league['id'] for r in rows)):
+            raise ValueError('Standings incomplete or refused')
+        client.save(f'standings-{sid}', payload, quiet=True)
+        store.persist(path)
+        print(f"Standings {league['name']}: {len(rows)} teams", flush=True)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--seed-cache',action='store_true')
     parser.add_argument('--cached-only',action='store_true')
+    parser.add_argument('--standings-only',action='store_true')
     parser.add_argument('--season',type=int)
     args=parser.parse_args()
+    if args.standings_only and (args.cached_only or args.seed_cache):
+        parser.error('--standings-only cannot be combined with cache-only modes')
     load_config();fetch_provider.load_env()
     with connect('FOOTBALL_IMPORT_DATABASE_URL') as conn:
         conn.autocommit=True
@@ -201,11 +231,15 @@ def main():
                 print('Seeded cached files:',len(paths));return 0
             if not store.hydrate(): raise ValueError('Persistent cache empty: run --seed-cache first')
             store.set('last_run',{'status':'running','time':utcnow().isoformat(),'cached_only':args.cached_only})
-            if not args.cached_only:
+            if not args.cached_only and not args.standings_only:
                 now=utcnow();season=args.season or (now.year if now.month>=7 else now.year-1)
                 download(store,season)
+            if not args.cached_only:
+                download_standings(store)
+                from fetch_org_standings import download as download_org
+                download_org(store, ROOT, utcnow())
             result=import_snapshot(conn,local_snapshot())
-            if not args.cached_only: store.set('last_success',utcnow().isoformat())
+            if not args.cached_only and not args.standings_only: store.set('last_success',utcnow().isoformat())
             store.set('last_run',{'status':'success','time':utcnow().isoformat(),'requests':store.calls,**result})
             print(json.dumps({'requests':store.calls,**result}),flush=True)
             return 0

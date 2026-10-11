@@ -25,6 +25,7 @@ jobs:
     env:
       FOOTBALL_IMPORT_DATABASE_URL: ${{ secrets.FOOTBALL_IMPORT_DATABASE_URL }}
       SPORTMONKS_TOKEN: ${{ secrets.SPORTMONKS_TOKEN }}
+      FOOTBALL_DATA_ORG: ${{ secrets.FOOTBALL_DATA_ORG }}
       PYTHONUNBUFFERED: '1'
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +40,7 @@ jobs:
         run: |
           test -n "$FOOTBALL_IMPORT_DATABASE_URL"
           test -n "$SPORTMONKS_TOKEN"
+          test -n "$FOOTBALL_DATA_ORG"
       - name: Acquire and import changed fixtures
         env:
           CACHED_ONLY: ${{ inputs.cached_only }}

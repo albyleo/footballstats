@@ -27,7 +27,7 @@ def load_env():
             if not line.strip() or line.lstrip().startswith("#"):
                 continue
             name, sep, value = line.partition("=")
-            if sep and name.strip() in {c[1] for c in CONFIG.values()}:
+            if sep and name.strip() in {c[1] for c in CONFIG.values()} | {'FOOTBALL_DATA_ORG'}:
                 os.environ.setdefault(name.strip(), value.strip().strip("\"'"))
 
 

@@ -26,6 +26,29 @@ def sample():
 
 
 class UnderstatTests(unittest.TestCase):
+    def test_expected_metrics_preserve_decimals_and_exclude_penalties(self):
+        match, envelope = sample()
+        match['xG'] = {'h': '0.95', 'a': '1.2'}
+        p = envelope['data']['rosters']['h']['30']
+        p.update(xG='0.95', xA='0.25', key_passes='2', xGChain='1.1', xGBuildup='0.2')
+        for shot, value, situation in zip(envelope['data']['shots']['h'], ['0.75','0.2'], ['Penalty','OpenPlay']):
+            shot.update(xG=value, situation=situation)
+        players, teams = stats.match_rows(match, envelope, 'Serie A', 'I1', '2026/2027')
+        self.assertEqual(players[0]['stats']['xa'], .25)
+        self.assertEqual(players[0]['stats']['npxg'], .2)
+        self.assertAlmostEqual(players[0]['stats']['goals-minus-xg'], .05)
+        self.assertAlmostEqual(teams[0]['stats']['xgd'], -.25)
+        self.assertEqual(teams[0]['stats']['xga'], 1.2)
+        self.assertIsNone(players[1]['stats']['xg'])
+        envelope['data']['shots']['h'][0]['xG'] = 'NaN'
+        players, _ = stats.match_rows(match, envelope, 'Serie A', 'I1', '2026/2027')
+        self.assertIsNone(players[0]['stats']['npxg'])
+
+    def test_invalid_expected_values_are_missing(self):
+        for value in (None, '', True, 'NaN', 'inf', '-0.1'):
+            self.assertIsNone(stats.expected(value))
+        self.assertEqual(stats.expected('0'), 0)
+
     def test_new_leagues_have_stable_team_names(self):
         for slug, league, code, original, normalized in [
             ('Bundesliga', 'Bundesliga', 'D1', 'Borussia Dortmund', 'Dortmund'),
