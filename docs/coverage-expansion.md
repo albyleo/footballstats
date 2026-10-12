@@ -5,9 +5,8 @@
   18 squadre, ultima data 20 settembre 2026. Gol FT/HT, tiri totali/in porta,
   gialli, falli e corner disponibili per entrambe le squadre; nessun giocatore.
   Importate 62 partite su Supabase e conservato il file nella cache persistente.
-- Arabia Saudita e Islanda: integrazione dati ancora bloccata. Una richiesta
-  API-Football /status ha restituito account sospeso. Nessun download di
-  partite tentato e nessuna copertura attuale dichiarata senza verificarla.
+- Arabia Saudita e Islanda: integrazione dati non disponibile nel campione.
+  La copertura delle stagioni va verificata prima di attivare un nuovo feed.
   Sportmonks Free copre Danimarca e Scozia, non questi campionati:
   https://www.sportmonks.com/football-api/free-plan/.
 - Understat: il client locale usa getLeagueData/<league>/<season> e
@@ -18,7 +17,7 @@
   Non è ricostruibile dal codice la prima scoperta storica degli endpoint.
   In questa verifica non sono state inviate richieste di acquisizione Understat.
 
-Per proseguire con Arabia Saudita e Islanda occorre risolvere la sospensione
-nel dashboard API-Football, poi controllare stagioni e copertura accessibili
+Per proseguire con Arabia Saudita e Islanda occorre controllare nel
+dashboard del provider le stagioni e la copertura accessibili
 prima di implementare il download. Non inserire campionati vuoti come se
 fossero coperti e non sostituire la stagione corrente con storici senza indicarlo.

@@ -17,6 +17,16 @@ import webapp
 
 
 class CacheTests(unittest.TestCase):
+    def test_validation_errors_do_not_disclose_internal_details(self):
+        private_detail = 'internal-reader-password /private/workspace/config'
+        with (patch.object(webapp.cloud_store, 'enabled', return_value=False),
+              patch.object(provider_stats, 'input_revision', side_effect=ValueError(private_detail)),
+              TestClient(webapp.app) as client):
+            response = client.get('/api/providers/report')
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn(private_detail, response.text)
+        self.assertEqual(response.json()['error'], 'Parametri non validi o dati non disponibili.')
+
     def test_concurrent_visitors_share_one_calculation(self):
         cache = ReportCache()
         build = Mock(return_value={"rows": [1]})

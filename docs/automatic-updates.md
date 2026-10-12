@@ -35,7 +35,7 @@ dopo ogni importazione e i visitatori non eseguono download dai provider.
 - Sportmonks: catalogo e partite concluse di Superliga/Premiership negli ultimi
   sette giorni, estesi all'ultima acquisizione riuscita in caso di interruzione.
   Oltre 99 giorni di interruzione occorre un recupero manuale a finestre.
-- API-Football non viene interrogata: l'account risultava sospeso.
+- API-Football non è inclusa nel job pianificato.
 - football-data.org: sei classifiche correnti (SA, PL, PD, BL1, FL1, PPL),
   autenticazione X-Auth-Token da `FOOTBALL_DATA_ORG`. Una richiesta per
   campionato, cache 24 ore, almeno 7 secondi tra richieste e tetto condiviso

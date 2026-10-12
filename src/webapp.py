@@ -69,8 +69,8 @@ async def provider_report(request):
     except cloud_store.StorageUnavailable as exc:
         return JSONResponse({'error': str(exc)}, status_code=503,
                             headers={'Cache-Control': 'no-store', 'Retry-After': '15'})
-    except (ValueError, TypeError) as exc:
-        return JSONResponse({"error": str(exc)}, status_code=400,
+    except (ValueError, TypeError):
+        return JSONResponse({"error": "Parametri non validi o dati non disponibili."}, status_code=400,
                             headers={"Cache-Control": "no-store"})
 
 

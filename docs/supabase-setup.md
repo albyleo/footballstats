@@ -1,13 +1,8 @@
 # Collegamento iniziale a Supabase
 
-Progetto: `xgrgicpooodooxsulwvh`. Questo documento non contiene credenziali.
-
-Verifica dell'11 ottobre 2026: schema presente, utenti separati configurati,
-270 partite / 84 squadre / 681 giocatori nell'archivio (579 con minuti),
-540 osservazioni di squadra e 4.037 individuali importate. Il reader ha SELECT
-senza INSERT/UPDATE/DELETE; report locali e remoti concordano. Endpoint testato
-con dati Supabase: HTTP 200 e cache HIT. Passaggi 1–3 completati sul progetto;
-procedere al passaggio 4 per Vercel, senza rigenerare le password.
+Guida generica: usare il proprio progetto Supabase. Identificativi, host e
+password negli esempi sono segnaposto. Se il progetto è già configurato,
+non rigenerare le credenziali; verificare lo stato prima di ripetere il setup.
 
 ## 1. Creare lo schema
 
@@ -29,10 +24,10 @@ Supabase → **Connect → Session pooler** (porta 5432). Copiare l'URI PostgreS
 Nel `.env` locale del progetto aggiungere:
 
 ```dotenv
-FOOTBALL_ADMIN_DATABASE_URL=postgresql://postgres.xgrgicpooodooxsulwvh:PASSWORD@HOST-DEL-POOLER:5432/postgres?sslmode=require
+FOOTBALL_ADMIN_DATABASE_URL=postgresql://postgres.PROJECT_REF:PASSWORD@POOLER_HOST:5432/postgres?sslmode=require
 ```
 
-Prendere HOST dalla dashboard, non dall'esempio. Sostituire PASSWORD con la
+Prendere PROJECT_REF e POOLER_HOST dalla dashboard. Sostituire PASSWORD con la
 password del database, codificando i caratteri speciali per un URL. Non usare
 le API key anon/service_role: sono credenziali diverse. Non incollare questa
 connessione in chat o su GitHub; non metterla su Vercel.
