@@ -10,6 +10,25 @@ from webapp import app
 
 
 class StatsTests(unittest.TestCase):
+    def test_shots_on_target_conceded_missing_zero_and_filters(self):
+        import premium_stats
+        base = dict(provider='sportmonks', league='L', season='S', date='2026-10-10', fetched_at='now')
+        teams = [{**base, 'fixture': 1, 'id': 1, 'name': 'A', 'team': 'A', 'stats': {'shots-on-target': 6}},
+                 {**base, 'fixture': 1, 'id': 2, 'name': 'B', 'team': 'B', 'stats': {'shots-on-target': 0}},
+                 {**base, 'fixture': 2, 'id': 1, 'name': 'A', 'team': 'A', 'stats': {}},
+                 {**base, 'fixture': 2, 'id': 2, 'name': 'B', 'team': 'B', 'stats': {}}]
+        snapshot = dict(players=[], teams=teams, warnings=[], catalog={}, sync=None)
+        metric = 'shots-on-target-conceded'
+        row = stats.report(kind='teams', metric=metric, team='A', snapshot=snapshot)['rows'][0]
+        self.assertEqual((row['total'], row['covered'], row['matches']), (0, 1, 2))
+        self.assertEqual(stats.report(kind='teams', metric=metric, team='B', snapshot=snapshot)['rows'][0]['total'], 6)
+        self.assertNotIn(metric, teams[0]['stats'])
+        self.assertIsNone(stats.with_goals_conceded(teams[:1])[0]['stats'][metric])
+        self.assertIsNone(stats.with_goals_conceded(teams[:2] + teams[:1])[0]['stats'][metric])
+        result = premium_stats.report(kind='teams', metric=metric, snapshot=snapshot)
+        self.assertEqual(result['primary']['summary']['mean'], 0)
+        self.assertNotIn(metric, premium_stats.metrics('players'))
+
     def test_conceded_uses_opponent_before_team_filter_and_preserves_snapshot(self):
         base = dict(provider='sportmonks', league='L', season='S', date='2026-10-10', fetched_at='now')
         teams = [{**base, 'fixture': 1, 'id': 1, 'name': 'A', 'team': 'A', 'stats': {'goals': 3}},

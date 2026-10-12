@@ -16,7 +16,7 @@ METRICS = {"shots-on-target": "Tiri in porta", "yellowcards": "Gialli",
            "goals-minus-xg": "Gol − xG", "key-passes": "Passaggi chiave",
            "xg-chain": "xGChain", "xg-buildup": "xGBuildup",
            "fouls": "Falli commessi", "fouls-drawn": "Falli subiti", "assists": "Assist", "goals": "Gol",
-           "shots-total": "Tiri totali", "goals-conceded": "Gol subiti", "first-half-goals": "Gol primo tempo", "corners": "Calci d’angolo"}
+           "shots-total": "Tiri totali", "shots-on-target-conceded": "Tiri in porta subiti", "goals-conceded": "Gol subiti", "first-half-goals": "Gol primo tempo", "corners": "Calci d’angolo"}
 
 
 def numeric(value):
@@ -113,7 +113,7 @@ def _dataset(directory, signature):
 
 
 def with_goals_conceded(teams):
-    """Derive opponent FT goals before filtering or merging; never mutate snapshots."""
+    """Derive opponent goals and shots on target before filtering or merging."""
     fixtures = defaultdict(list)
     for row in teams:
         fixtures[(row['provider'], row['league'], row['season'], row['fixture'])].append(row)
@@ -122,7 +122,9 @@ def with_goals_conceded(teams):
         for row in rows:
             opponent = [other for other in rows if other['id'] != row['id']]
             conceded = opponent[0]['stats'].get('goals') if len(rows) == 2 and len(opponent) == 1 else None
-            result.append({**row, 'stats': {**row['stats'], 'goals-conceded': conceded}})
+            shots = opponent[0]['stats'].get('shots-on-target') if len(rows) == 2 and len(opponent) == 1 else None
+            result.append({**row, 'stats': {**row['stats'], 'goals-conceded': conceded,
+                                          'shots-on-target-conceded': shots}})
     return result
 
 

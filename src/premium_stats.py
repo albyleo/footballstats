@@ -10,7 +10,7 @@ import understat_stats
 RATIOS = {'xg-per-shot': ('xg', 'shots-total', 1, 'xG per tiro'),
           'on-target-share': ('shots-on-target', 'shots-total', 100, 'Tiri in porta (%)'),
           'xga-per-shot': ('xga', 'shots-conceded', 1, 'xG per tiro concesso')}
-TEAM_ONLY = {'goals-conceded', 'first-half-goals', 'corners', 'xga', 'xgd', 'shots-conceded', 'xga-per-shot'}
+TEAM_ONLY = {'shots-on-target-conceded', 'goals-conceded', 'first-half-goals', 'corners', 'xga', 'xgd', 'shots-conceded', 'xga-per-shot'}
 PLAYER_ONLY = {'xa', 'key-passes', 'xg-chain', 'xg-buildup', 'assists', 'fouls-drawn'}
 
 

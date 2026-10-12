@@ -22,6 +22,7 @@ I risultati e le serie dei due profili sono esportabili in Excel.
 - Il campo sconosciuto non viene indovinato: resta nel totale generale ed è escluso dai confronti per campo.
 - La frequenza è `osservazioni valide con valore ≥ soglia / osservazioni valide`. È una descrizione del campione, non una probabilità prevista.
 - I tiri concessi sono ricavati dai tiri dell'avversario solo quando sono presenti le due squadre della stessa partita nella stessa fonte.
+- I tiri in porta subiti corrispondono ai tiri in porta dell'avversario nella stessa partita e fonte. Sono distinti dai tiri totali concessi: descrivono i tentativi nello specchio, non tutti i tentativi. Senza una coppia univoca di squadre o senza il dato avversario il valore resta mancante; zero viene conservato.
 
 La stagione in archivio può essere incompleta. Queste analisi non costituiscono un dataset pre-partita: le medie mobili includono l'incontro corrente. Per addestrare modelli previsionali serviranno variabili calcolate esclusivamente prima del calcio d'inizio e una validazione temporale.
 
