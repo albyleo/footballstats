@@ -107,7 +107,7 @@ function renderTable(all = false) {
   const caption = document.createElement('caption'); caption.className = 'sr-only'; caption.textContent = `${player ? 'Giocatori' : 'Squadre'}: ${metricName}`; table.append(caption);
   const columns = detail ? [player?'Giocatore':'Squadra','Campionato',metricName,player?'Per 90′ osservati':'Media per partita',player?'Minuti osservati':'Partite con dato',player?'Presenze':'Partite',player?'Minuti totali':'Ultimi risultati',player?'Da titolare':'Base titolare stagionale'] : [player?'Giocatore':'Squadra',player?'Squadra':'Campionato',...keys.map(k=>latest.metrics[k]),player?'Minuti':'Ultimi risultati',player?'Presenze':'Partite',player?'Da titolare':'Base titolare stagionale'];
   if (!player) {columns.splice(2,0,'Prossimo avversario (campionato)','Posizione in classifica');columns.push('Prossima partita / base');}
-  columns.forEach(value => cell(header, 'th', value)); head.append(header); table.append(head);
+  columns.forEach((value, index) => {const th=cell(header, 'th', value);if(!player && index===2)th.classList.add('next-opponent');}); head.append(header); table.append(head);
   const body = document.createElement('tbody');
   page = Math.min(page, Math.max(0, Math.ceil(latest.rows.length/size)-1));
   for (const row of (all === true ? latest.rows : latest.rows.slice(page*size,(page+1)*size))) {
@@ -116,7 +116,7 @@ function renderTable(all = false) {
     cell(tr,'td',player&&!detail?row.team:row.league,player&&!detail?row.league:row.season);
     if (!player) {
       const upcoming=row.next_fixture;
-      cell(tr,'td',upcoming?.opponent,upcoming ? `${formatDate(upcoming.date)} · ${upcoming.venue==='home'?'Casa':'Trasferta'} · calendario salvato` : 'Non disponibile nel calendario salvato');
+      cell(tr,'td',upcoming?.opponent,upcoming ? `${formatDate(upcoming.date)} · ${upcoming.venue==='home'?'Casa':'Trasferta'}` : 'Calendario non disponibile').classList.add('next-opponent');
       const standing=row.standing;
       const note=standing ? `${standing.points == null ? '' : standing.points+' punti · '}${standing.source} · rilevata ${formatDate(standing.fetched_at?.slice(0,10))}${standing.stage ? ' · '+standing.stage : ''}${standing.group ? ' · '+standing.group : ''}` : 'Classifica ufficiale non disponibile nel feed';
       cell(tr,'td',standing ? `${standing.position}°` : null,note);
