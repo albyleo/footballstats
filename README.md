@@ -33,6 +33,7 @@ Una nuova installazione parte senza dati reali: JSON/CSV scaricati, database e c
 - Posizioni di classifica fornite dai feed, senza ricostruzioni da campioni parziali.
 - Base titolare stagionale e confronto con l'ultima formazione acquisita.
 - Esportazione delle tabelle in Excel.
+- Premium Analytics in anteprima gratuita su `/premium`: casa/trasferta, schede con grafici e medie mobili, confronto tra profili, qualità dei tiri e frequenza/variabilità. [Metodologia e configurazione](docs/premium-analytics.md).
 
 I valori mancanti sono indicati con “—”, mai sostituiti con zero. Totali e medie si riferiscono ai dati osservati; i valori per 90 minuti usano soltanto i minuti associati alla metrica. Gli xG descrivono le occasioni osservate e non sono previsioni del prossimo risultato. La continuità della formazione non misura la forma fisica; infortuni e squalifiche non sono acquisiti.
 
@@ -43,7 +44,7 @@ I valori mancanti sono indicati con “—”, mai sostituiti con zero. Totali e
 | Sportmonks | Partite, statistiche, formazioni e classifiche dei campionati accessibili al piano |
 | football-data.org | Classifiche generali dei sei campionati europei configurati |
 | football-data.co.uk | Risultati e statistiche di squadra da CSV |
-| Understat | Statistiche individuali, tiri e metriche attese per i campionati supportati |
+| archivio integrativo | Statistiche individuali, tiri e metriche attese per i campionati supportati |
 | API-Football | Client CLI disponibile; risposte non normalizzate nella dashboard |
 
 Una chiave non garantisce accesso a tutte le stagioni o metriche. Date e copertura effettiva sono mostrate nell'applicazione. Football data provided by [football-data.org](https://www.football-data.org/).
@@ -105,7 +106,7 @@ Vercel carica l'app ASGI `src.webapp:app`, configurata in `pyproject.toml`. Vers
 - [Pubblicazione su GitHub e Vercel](docs/publishing.md)
 - [Workflow, cache e budget](docs/automatic-updates.md)
 - [Metriche attese](docs/expected-metrics.md)
-- [Copertura e riconciliazione Understat](docs/understat-coverage.md)
+- [Copertura e riconciliazione archivio integrativo](docs/archive-coverage.md)
 - [Strumenti MCP locali opzionali](docs/mcp.md)
 
 ## Test

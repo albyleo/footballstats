@@ -95,6 +95,7 @@ def match_rows(match, envelope, league, code, season):
                           and all(s.get('situation') in {'OpenPlay','FromCorner','SetPiece','DirectFreekick','Penalty'} for s in shots))
             stats['npxg'] = sum(x for s, x in zip(shots, shot_xg) if s['situation'] != 'Penalty') if consistent else None
             row = dict(**base, id='understat:' + str(p['player_id']), name=p['player'], team=team,
+                       venue='home' if side == 'h' else 'away', opponent=name(league, match[other]['title']),
                        team_id=tid, minutes=goal_count(p.get('time')), starter=p.get('position') != 'Sub',
                        stats=stats, metric_sources={'shots-on-target': 'Understat shots: Goal + SavedShot; total checked'})
             players.append(row)
@@ -112,6 +113,7 @@ def match_rows(match, envelope, league, code, season):
         values = [p['stats']['npxg'] for p in side_players]
         team_stats['npxg'] = sum(values) if complete_shots and None not in values else None
         teams.append(dict(**base, id=tid, name=team, team=team,
+                          venue='home' if side == 'h' else 'away',
                           opponent=name(league, match[other]['title']), stats=team_stats,
                           outcome='V' if ft[side] > ft[other] else 'P' if ft[side] == ft[other] else 'S',
                           starters=sorted(p['id'] for p in side_players if p['starter'])))

@@ -17,6 +17,27 @@ import webapp
 
 
 class CacheTests(unittest.TestCase):
+    def test_public_response_uses_generic_source_labels_without_mutating_archive(self):
+        payload = {'rows': [{'provider': 'understat', 'total': 1.25}],
+                   'warnings': ['Understat: incomplete'], 'halftime_audit': [{'fixture': 'understat:1'}]}
+        with (patch.object(webapp.cloud_store, 'enabled', return_value=False),
+              patch.object(provider_stats, 'input_revision', return_value='public-label-test'),
+              patch.object(provider_stats, 'report', return_value=payload),
+              patch.object(webapp, 'REPORT_CACHE', ReportCache()),
+              TestClient(webapp.app) as client):
+            response = client.get('/api/providers/report')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('understat', response.text.lower())
+        self.assertEqual(response.json()['rows'][0]['total'], 1.25)
+        self.assertEqual(payload['rows'][0]['provider'], 'understat')
+
+    def test_public_documentation_has_no_internal_source_name(self):
+        root = Path(__file__).resolve().parents[1]
+        files = [root/'README.md', *(root/'docs').glob('*.md'), *(root/'src/static').glob('*')]
+        for path in files:
+            if path.is_file() and path.suffix in ('.md', '.html', '.js', '.css', '.svg'):
+                self.assertNotIn('understat', path.read_text(encoding='utf-8').lower(), str(path.relative_to(root)))
+
     def test_validation_errors_do_not_disclose_internal_details(self):
         private_detail = 'internal-reader-password /private/workspace/config'
         with (patch.object(webapp.cloud_store, 'enabled', return_value=False),

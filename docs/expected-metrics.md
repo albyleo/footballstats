@@ -1,6 +1,6 @@
 # Metriche attese
 
-Disponibili dai file Understat già acquisiti, senza nuove richieste HTTP.
+Disponibili dai file archivio integrativo già acquisiti, senza nuove richieste HTTP.
 I valori sono stime del modello del provider sulle occasioni osservate,
 non previsioni del risultato della prossima partita.
 

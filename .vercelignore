@@ -8,6 +8,7 @@
 *.duckdb.wal
 *.log
 artifacts/
+output/
 data/
 scripts/
 docs/

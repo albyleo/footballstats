@@ -13,6 +13,7 @@ data/raw/*.csv
 # Local configuration, generated audits/screenshots and personal working notes.
 .mcp.json
 artifacts/
+output/
 /Modificato smoke_test.py, eseguito.txt
 *.log
 .pytest_cache/

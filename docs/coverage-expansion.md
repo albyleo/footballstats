@@ -9,13 +9,7 @@
   La copertura delle stagioni va verificata prima di attivare un nuovo feed.
   Sportmonks Free copre Danimarca e Scozia, non questi campionati:
   https://www.sportmonks.com/football-api/free-plan/.
-- Understat: il client locale usa getLeagueData/<league>/<season> e
-  getMatchData/<id>. Gli stessi percorsi sono presenti nel codice sorgente
-  del connettore soccerdata:
-  https://github.com/probberechts/soccerdata/blob/master/soccerdata/understat.py.
-  Questo riscontro non costituisce autorizzazione o SLA ufficiale Understat.
-  Non è ricostruibile dal codice la prima scoperta storica degli endpoint.
-  In questa verifica non sono state inviate richieste di acquisizione Understat.
+- Archivio integrativo: dati acquisiti separatamente e riconciliati con le altre fonti.
 
 Per proseguire con Arabia Saudita e Islanda occorre controllare nel
 dashboard del provider le stagioni e la copertura accessibili

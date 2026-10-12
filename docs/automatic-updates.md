@@ -28,9 +28,9 @@ dopo ogni importazione e i visitatori non eseguono download dai provider.
   GitHub senza cancellare una run in corso. Anche l'importatore manuale usa
   la stessa chiave di lock. I vecchi downloader standalone non partecipano
   al budget del job: usare `scheduled_sync.py` per le acquisizioni coordinate.
-- Cinque cataloghi Understat della stagione luglio-giugno; i dettagli vengono
+- Cinque cataloghi archivio integrativo della stagione luglio-giugno; i dettagli vengono
   scaricati se mancanti, oppure ricontrollati per le partite degli ultimi
-  sette giorni. La cache JSON Understat ha una freschezza minima di 24 ore.
+  sette giorni. La cache JSON archivio integrativo ha una freschezza minima di 24 ore.
 - Sei CSV della stagione, salvati solo se il contenuto cambia.
 - Sportmonks: catalogo e partite concluse di Superliga/Premiership negli ultimi
   sette giorni, estesi all'ultima acquisizione riuscita in caso di interruzione.
@@ -45,13 +45,13 @@ dopo ogni importazione e i visitatori non eseguono download dai provider.
   mai fuzzy matching. Classifiche conservate per stagione in Supabase.
   Questa chiave serve sul job, non su Vercel. Nessuna nuova migrazione SQL.
 - Pausa minima di tre secondi fra richieste; niente retry automatici.
-- Budget massimo giornaliero condiviso: Understat 250, CSV 6, Sportmonks 20.
+- Budget massimo giornaliero condiviso: archivio integrativo 250, CSV 6, Sportmonks 20.
   Sono tetti, non obiettivi di consumo. Anche richieste fallite consumano budget.
 - HTTP 403/429/503 interrompono il processo e registrano una pausa persistente,
   rispettando Retry-After (minimo un'ora; default sei ore). Gli altri errori
   interrompono la run senza retry. Il budget limita anche i rilanci manuali.
-- Understat: 401/403 e risposte JSON non valide/incomplete impostano anche
-  `blocked:understat=true` su Supabase. Nessuna nuova acquisizione di rete
+- archivio integrativo: 401/403 e risposte JSON non valide/incomplete impostano anche
+  `blocked:<provider>=true` su Supabase. Nessuna nuova acquisizione di rete
   viene tentata finché un amministratore non verifica la causa e rimuove il
   blocco. User-Agent identificativo `MyComboDataSync/1.0`; nessun CAPTCHA,
   proxy o rotazione di IP. Queste misure non garantiscono l'accesso futuro.
@@ -65,7 +65,7 @@ dopo ogni importazione e i visitatori non eseguono download dai provider.
   persistenti in sync_cache e dataset_state.metadata.standings. Una variazione
   di classifica aggiorna la revisione anche senza modifiche alle partite.
   `--standings-only` aggiorna soltanto queste risposte e importa l'archivio
-  locale ripristinato, senza download Understat/CSV e senza avanzare last_success
+  locale ripristinato, senza download archivio integrativo/CSV e senza avanzare last_success
   dell'acquisizione completa. La vista usa posizione, campionato, stagione e
   squadra del provider; nessun ricalcolo sui filtri. Dati assenti o più fasi
   ambigue danno “—”, mai una classifica stimata. Nessuna migrazione SQL richiesta.

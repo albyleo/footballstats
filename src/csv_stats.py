@@ -60,7 +60,7 @@ def load_rows(paths):
                     rows.append({"provider": "football-data.co.uk", "fixture": fixture, "date": date.isoformat(),
                         "league": league, "league_id": f"csv:{code}", "season": f"{start_year}/{start_year+1}",
                         "country": country, "fetched_at": fetched, "id": f"csv:{code}:{name}",
-                        "name": name, "team": name, "opponent": opponent, "stats": stats,
+                        "name": name, "team": name, "opponent": opponent, "venue": 'home' if side == 'H' else 'away', "stats": stats,
                         "outcome": "V" if ft[i] > ft[1-i] else "P" if ft[i] == ft[1-i] else "S",
                         "starters": [], "halftime_audit": audit, "source_file": path.name})
     return rows, warnings

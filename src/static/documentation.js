@@ -6,7 +6,7 @@ function cell(row, tag, value, note) {
 }
 // Public labels are categories. Original provider identifiers remain in the archive.
 const sourceLabel = provider => /sportmonks/i.test(provider) ? 'Sportmonks' : /api.?football/i.test(provider) ? 'API-Football' : 'Archivio integrativo';
-const qualityLabel = warning => warning.replace(/Understat/gi,'Archivio integrativo');
+const qualityLabel = warning => warning;
 function renderAudit() {
   const audits=report?.halftime_audit||[];
   const verified=audits.filter(a=>a.status.startsWith('verified')).length;

@@ -75,6 +75,7 @@ def _dataset(directory, signature):
     for match, fetched in fixtures.values():
         audit = audit_match(match)
         names = {p["id"]: p["name"] for p in match.get("participants", [])}
+        venues = {p['id']: (p.get('meta') or {}).get('location') for p in match.get('participants', [])}
         base = {"provider": "sportmonks", "fixture": match["id"], "date": match["starting_at"][:10],
                 "league": leagues.get(match["league_id"], {}).get("name", str(match["league_id"])),
                 "league_id": match["league_id"],
@@ -83,6 +84,8 @@ def _dataset(directory, signature):
             stats = details(player.get("details", []))
             # Unused substitutes remain in roster data but are not appearances.
             players.append({**base, "id": player["player_id"], "name": player["player_name"],
+                            "venue": venues.get(player['team_id']),
+                            "opponent": next((n for i,n in names.items() if i != player['team_id']), None),
                             "team": names.get(player["team_id"], str(player["team_id"])),
                             "team_id": player["team_id"], "starter": player.get("type_id") == 11,
                             "minutes": stats.get("minutes-played"), "stats": stats})
@@ -97,6 +100,7 @@ def _dataset(directory, signature):
             starters = sorted(p["player_id"] for p in match.get("lineups", [])
                               if p["team_id"] == tid and p.get("type_id") == 11)
             teams.append({**base, "id": tid, "name": name, "team": name, "stats": stats,
+                          "venue": venues.get(tid), "opponent": names.get(opponent),
                           "outcome": outcome, "starters": starters, "halftime_audit": audit})
     csv_rows, csv_warnings = csv_stats.load_rows(csv_stats.files())
     teams.extend(csv_rows)
