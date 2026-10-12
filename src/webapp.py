@@ -5,6 +5,7 @@ Feed acquisition is a separate CLI process in scripts/fetch_provider.py.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import argparse
 import os
 from pathlib import Path
@@ -47,8 +48,8 @@ async def premium_report(request):
         def read():
             if cloud_store.enabled():
                 snapshot = cloud_store.SNAPSHOTS.get()
-                return PREMIUM_CACHE.get(args, ('supabase',snapshot['revision']), lambda: public_report(premium_stats.report(*args,snapshot=snapshot)))
-            return PREMIUM_CACHE.get(args,provider_stats.input_revision(),lambda: public_report(premium_stats.report(*args)))
+                return PREMIUM_CACHE.get(args, ('supabase',snapshot['revision'],datetime.now(timezone.utc).date().isoformat()), lambda: public_report(premium_stats.report(*args,snapshot=snapshot)))
+            return PREMIUM_CACHE.get(args,(provider_stats.input_revision(),datetime.now(timezone.utc).date().isoformat()),lambda: public_report(premium_stats.report(*args)))
         body, etag, hit = await run_in_threadpool(read)
         headers = {'Cache-Control':'no-cache', 'ETag':etag, 'X-Report-Cache':'HIT' if hit else 'MISS'}
         if request.headers.get('if-none-match') == etag:
@@ -86,9 +87,9 @@ async def provider_report(request):
         def read_local():
             if cloud_store.enabled():
                 snapshot = cloud_store.SNAPSHOTS.get()
-                return REPORT_CACHE.get(args, ('supabase', snapshot['revision']),
+                return REPORT_CACHE.get(args, ('supabase', snapshot['revision'],datetime.now(timezone.utc).date().isoformat()),
                                         lambda: public_report(provider_stats.report(*args, snapshot=snapshot)))
-            return REPORT_CACHE.get(args, provider_stats.input_revision(),
+            return REPORT_CACHE.get(args, (provider_stats.input_revision(),datetime.now(timezone.utc).date().isoformat()),
                                     lambda: public_report(provider_stats.report(*args)))
 
         body, etag, hit = await run_in_threadpool(read_local)

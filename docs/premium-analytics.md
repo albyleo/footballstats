@@ -12,6 +12,8 @@ La pagina `/premium` offre analisi descrittive su dati già archiviati. Durante 
 
 I risultati e le serie dei due profili sono esportabili in Excel.
 
+Le schede squadra e il confronto mostrano anche il prossimo avversario in campionato, la data e il campo, come l'esploratore standard. Il calendario salvato copre attualmente i cinque principali campionati; non include coppe. Le partite sono selezionate tra quelle non concluse nel calendario acquisito, dalla data odierna UTC in avanti. L'orario non viene pubblicato perché il fuso della fonte non è garantito. Le variazioni e gli esiti della giornata saranno recepiti al successivo aggiornamento del calendario: non è un servizio live. Il job importa il calendario nei metadati JSONB anche quando le statistiche delle partite restano identiche; non serve una migrazione SQL.
+
 ## Calcoli e dati mancanti
 
 - Le medie per partita usano soltanto osservazioni con metrica disponibile; zero è un valore valido. Ogni riepilogo mostra il numero di osservazioni valide rispetto a quelle caricate.

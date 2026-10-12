@@ -5,6 +5,7 @@ import math
 import statistics
 
 import provider_stats
+import upcoming
 import understat_stats
 
 RATIOS = {'xg-per-shot': ('xg', 'shots-total', 1, 'xG per tiro'),
@@ -136,8 +137,15 @@ def report(kind='teams', league='', season='', entity='', compare='', metric='xg
     entity = entity or (entities[0]['id'] if entities else '')
     if (entity and entity not in groups) or (compare and compare not in groups):
         raise ValueError('Entity not in selected competition/season')
+    next_games = upcoming.index(upcoming.load() if snapshot is None else snapshot.get('upcoming', [])) if kind == 'teams' else {}
+    def build(key):
+        if not key:
+            return None
+        result = profile(groups[key],kind,metric,basis,venue,last_n,threshold)
+        result['next_fixture'] = upcoming.lookup(next_games, groups[key][0])
+        return result
     return dict(access='open_preview', leagues=leagues, seasons=seasons, entities=entities, metrics=metrics(kind),
                 filters=dict(kind=kind,league=league,season=season,entity=entity,compare=compare,metric=metric,venue=venue,last_n=last_n,basis=basis,threshold=threshold),
-                primary=profile(groups[entity],kind,metric,basis,venue,last_n,threshold) if entity else None,
-                comparison=profile(groups[compare],kind,metric,basis,venue,last_n,threshold) if compare else None,
+                primary=build(entity),
+                comparison=build(compare),
                 warnings=warnings)

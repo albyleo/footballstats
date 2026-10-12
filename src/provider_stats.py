@@ -7,6 +7,7 @@ from pathlib import Path
 import csv_stats
 import understat_stats
 import standings
+import upcoming
 from lineup_stats import season_lineups
 from score_audit import audit_match, score_value
 
@@ -135,6 +136,7 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
     players, teams, warnings = dataset() if snapshot is None else (snapshot['players'], snapshot['teams'], snapshot['warnings'])
     players, teams, merge_warnings = understat_stats.merge_sources(players, with_goals_conceded(teams))
     league_positions = standings.index(standings.load() if snapshot is None else snapshot.get('standings', {})) if kind == 'teams' else {}
+    next_games = upcoming.index(upcoming.load() if snapshot is None else snapshot.get('upcoming', [])) if kind == 'teams' else {}
     lineups = season_lineups(players, teams) if kind == 'teams' else {}
     warnings = warnings + merge_warnings
     warnings = sorted(set(warnings + [issue for row in teams for issue in row.get('player_data_issues', [])]))
@@ -167,6 +169,7 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
         if kind == "teams" and len(rows) >= 2 and all(len(r.get("starters", [])) == 11 for r in rows[:2]):
             same_starters = len(set(rows[0]["starters"]) & set(rows[1]["starters"]))
         result.append({"name": first["name"], "team": first["team"], "league": first["league"],
+                       "next_fixture": upcoming.lookup(next_games, first),
                        "standing": standings.lookup(league_positions, first),
                        "provider": first["provider"],
                        "season": first["season"], "matches": len(rows), "covered": len(known),

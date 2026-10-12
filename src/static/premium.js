@@ -30,7 +30,8 @@ function chart(profile){
 }
 function matchRows(profile){return profile.series.map(p=>[date(p.date),p.opponent||'—',p.venue==='home'?'Casa':p.venue==='away'?'Trasferta':'—',p.minutes,p.value,p.ma5,p.ma10]);}
 const matchHeaders=['Data','Avversario','Campo','Minuti','Valore','Media mobile 5','Media mobile 10'];
-function comparisonRows(a,b){const fields=[['Media',s=>s.mean],['Mediana',s=>s.median],['Copertura',coverage],['Deviazione standard',s=>s.stddev],['Minimo',s=>s.minimum],['Massimo',s=>s.maximum],['Frequenza ≥ soglia',s=>`${s.successes}/${s.covered}`]];return fields.map(([label,get])=>[label,get(a.summary),get(b.summary)]);}
+function nextFixture(p){const n=p.next_fixture;return n?`${n.opponent} · ${date(n.date)} · ${n.venue==='home'?'Casa':'Trasferta'}`:'Non disponibile nel calendario salvato';}
+function comparisonRows(a,b){const fields=[['Media',s=>s.mean],['Mediana',s=>s.median],['Copertura',coverage],['Deviazione standard',s=>s.stddev],['Minimo',s=>s.minimum],['Massimo',s=>s.maximum],['Frequenza ≥ soglia',s=>`${s.successes}/${s.covered}`]];return [...(data.filters.kind==='teams'?[['Prossimo avversario (campionato)',nextFixture(a),nextFixture(b)]]:[]),...fields.map(([label,get])=>[label,get(a.summary),get(b.summary)])];}
 function render(){
   const f=data.filters,a=data.primary,b=data.comparison;
   options('league',data.leagues.map(x=>({label:x,value:x})),f.league);
@@ -43,6 +44,7 @@ function render(){
   const s=a.summary,unit=ratioKeys.includes(f.metric)?'rapporto aggregato':f.basis==='per90'?'per 90′':'per partita/presenza';
   $('scope').textContent=f.kind==='teams'?'SQUADRA':'GIOCATORE';$('title').textContent=a.name;
   $('subtitle').textContent=`${a.team} · ${a.league} · ${a.season} · ${data.metrics[f.metric]} (${unit})`;
+  $('next-fixture').hidden=f.kind!=='teams';$('next-fixture').textContent='Prossimo avversario (campionato): '+nextFixture(a);
   $('freshness').textContent=`Ultima partita in archivio: ${date(a.latest)}`;
   $('status').textContent=`${coverage(s)} · dati salvati · nessuna chiamata ai feed`;
   $('kpis').replaceChildren(kpi('Periodo selezionato',s.mean,coverage(s)),kpi('Stagione / campo selezionato',a.season_summary.mean,coverage(a.season_summary)),kpi('Ultime 5 caricate',a.last5.mean,coverage(a.last5)),kpi('Ultime 10 caricate',a.last10.mean,coverage(a.last10)));
@@ -69,7 +71,7 @@ async function refresh(reset=''){
 }
 for(const id of fields){$(id).addEventListener(id==='threshold'?'input':'change',()=>{clearTimeout(timer);timer=setTimeout(()=>refresh(id),id==='threshold'?400:0);});}
 $('reload').addEventListener('click',()=>refresh());
-$('export').addEventListener('click',()=>{if(!data?.primary)return;const a=data.primary,f=data.filters;const rows=[['Premium · anteprima gratuita'],[a.name,a.league,a.season],['Metrica',data.metrics[f.metric]],['Campo',f.venue,'Ultime N',f.last_n,'Base',f.basis,'Soglia ≥',f.threshold],['Ultima partita',a.latest],['Media','Mediana','Copertura','Frequenza'],[a.summary.mean,a.summary.median,coverage(a.summary),a.summary.frequency],['Stagione',a.season_summary.mean,coverage(a.season_summary)],['Casa / stagione',a.splits.home.mean,coverage(a.splits.home)],['Trasferta / stagione',a.splits.away.mean,coverage(a.splits.away)],...Object.entries(a.quality).map(([k,v])=>[data.metrics[k],v.value,v.covered]),[],...matchRows(a)];rows.splice(rows.length-a.series.length,0,matchHeaders);if(data.comparison){rows.push([],['Confronto',a.name,data.comparison.name],...comparisonRows(a,data.comparison),[],['Partite del confronto'],matchHeaders,...matchRows(data.comparison));}exportTable($('export'),table(['MyCombo srl / Analytics'],rows),'mycombo-premium-analisi');});
+$('export').addEventListener('click',()=>{if(!data?.primary)return;const a=data.primary,f=data.filters;const rows=[['Premium · anteprima gratuita'],[a.name,a.league,a.season],['Metrica',data.metrics[f.metric]],['Campo',f.venue,'Ultime N',f.last_n,'Base',f.basis,'Soglia ≥',f.threshold],['Ultima partita',a.latest],['Prossimo avversario (campionato)',f.kind==='teams'?nextFixture(a):'—'],['Media','Mediana','Copertura','Frequenza'],[a.summary.mean,a.summary.median,coverage(a.summary),a.summary.frequency],['Stagione',a.season_summary.mean,coverage(a.season_summary)],['Casa / stagione',a.splits.home.mean,coverage(a.splits.home)],['Trasferta / stagione',a.splits.away.mean,coverage(a.splits.away)],...Object.entries(a.quality).map(([k,v])=>[data.metrics[k],v.value,v.covered]),[],...matchRows(a)];rows.splice(rows.length-a.series.length,0,matchHeaders);if(data.comparison){rows.push([],['Confronto',a.name,data.comparison.name],...comparisonRows(a,data.comparison),[],['Partite del confronto'],matchHeaders,...matchRows(data.comparison));}exportTable($('export'),table(['MyCombo srl / Analytics'],rows),'mycombo-premium-analisi');});
 const initial=new URLSearchParams(location.search);for(const id of fields){const v=initial.get(id);if(v!=null&&v.length<=128){if(['league','season','entity','compare','metric'].includes(id))$(id).add(new Option(v,v));$(id).value=v;}}
 refresh();
 
