@@ -146,7 +146,7 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
     players, teams, merge_warnings = understat_stats.merge_sources(players, with_goals_conceded(teams))
     league_positions = standings.index(standings.load() if snapshot is None else snapshot.get('standings', {})) if kind == 'teams' else {}
     next_games = upcoming.index(upcoming.load() if snapshot is None else snapshot.get('upcoming', [])) if kind == 'teams' else {}
-    lineups = season_lineups(players, teams) if kind == 'teams' else {}
+    lineups = season_lineups(players, teams, combine_sources=True) if kind == 'teams' else {}
     warnings = warnings + merge_warnings
     warnings = sorted(set(warnings + [issue for row in teams for issue in row.get('player_data_issues', [])]))
     selected = [r for r in (players if kind == "players" else teams)
@@ -156,10 +156,14 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
     for row in selected:
         if kind == "players" and not (row["minutes"] is not None and row["minutes"] > 0):
             continue
-        groups[(row["provider"], row["id"], row["team"], row["league"], row["season"])].append(row)
+        # Source reconciliation already selected one observation per fixture.
+        # A CSV-only game must not split a team's season into another table row.
+        key = ((row['league'], row['season'], row['team']) if kind == 'teams'
+               else (row['provider'], row['id'], row['team'], row['league'], row['season']))
+        groups[key].append(row)
     result = []
     for rows in groups.values():
-        rows = sorted(rows, key=lambda r: (r["date"], r["fixture"]), reverse=True)
+        rows = sorted(rows, key=lambda r: (r["date"], str(r["fixture"])), reverse=True)
         if last_n:
             rows = rows[:last_n]
         known = [r for r in rows if r["stats"].get(metric) is not None]
@@ -175,7 +179,7 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
                   if any(r["stats"].get(k) is not None for r in rows) else None for k in METRICS}
         coverage = {k: sum(r["stats"].get(k) is not None for r in rows) for k in METRICS}
         same_starters = None
-        if kind == "teams" and len(rows) >= 2 and all(len(r.get("starters", [])) == 11 for r in rows[:2]):
+        if kind == "teams" and len(rows) >= 2 and rows[0]['provider'] == rows[1]['provider'] and all(len(r.get("starters", [])) == 11 for r in rows[:2]):
             same_starters = len(set(rows[0]["starters"]) & set(rows[1]["starters"]))
         result.append({"name": first["name"], "team": first["team"], "league": first["league"],
                        "next_fixture": upcoming.lookup(next_games, first),
@@ -189,7 +193,7 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
                        "totals": totals, "coverage": coverage, "paired_minutes": paired_minutes,
                        "form": [r.get("outcome") for r in rows[:5]][::-1] if kind == "teams" else [],
                        "same_starters": same_starters,
-                       "season_lineup": lineups.get((first['provider'], first['league'], first['season'], first['team']))})
+                       "season_lineup": lineups.get((first['league'], first['season'], first['team']))})
     if sort == "name":
         result.sort(key=lambda r: r["name"].casefold())
     else:

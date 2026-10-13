@@ -7,6 +7,24 @@ import provider_stats
 
 
 class LineupTests(unittest.TestCase):
+    def test_team_row_combines_reconciled_sources_and_keeps_lineup_coverage(self):
+        rows=[self.fixture(1,list(range(11))),
+              {**self.fixture(2,[]),'provider':'csv','id':'csv-team'}]
+        snapshot=dict(players=[],teams=rows,catalog={},sync=None,warnings=[])
+        report=provider_stats.report('teams','goals',snapshot=snapshot)
+        self.assertEqual(len(report['rows']),1)
+        row=report['rows'][0]
+        self.assertEqual((row['matches'],row['total']),(2,2))
+        self.assertEqual((row['season_lineup']['sample'],row['season_lineup']['season_matches']),(1,2))
+        self.assertIsNone(row['season_lineup']['latest_common'])
+
+    def test_combined_lineups_do_not_collide_player_ids_across_sources(self):
+        rows=[self.fixture(1,list(range(11))),
+              {**self.fixture(2,list(range(11))),'provider':'other'}]
+        result=season_lineups([],rows,combine_sources=True)[('League','2026','Team')]
+        self.assertTrue(result['tie'])
+        self.assertTrue(all(p['starts']==1 for p in result['reference']))
+
     def fixture(self, fixture, starters, season='2026'):
         return dict(provider='test', league='League', season=season, team='Team', name='Team',
                     id=1, fixture=fixture, date=f'2026-09-{fixture:02}', fetched_at='2026-10-01',
