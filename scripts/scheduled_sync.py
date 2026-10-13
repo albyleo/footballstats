@@ -23,13 +23,60 @@ from fetch_understat import LEAGUES, save
 import fetch_provider
 from fetch_football_data import _looks_like_csv
 from psycopg.types.json import Jsonb
+from public_report import public_report
 
 LIMITS = {'understat': 250, 'csv': 6, 'sportmonks': 20, 'football-data.org': 12}
-ALLOWED = re.compile(r'data/(?:providers/football-data-org/standings-(?:SA|PL|PD|BL1|FL1|PPL)-\d{4}\.json|raw/(?:I1|E0|SP1|D1|F1|P1)_20\d\d-\d\d\.csv|providers/understat/(?:league-[A-Za-z_]+-\d{4}|match-\d+)\.json|providers/sportmonks/(?:match-\d+|leagues-page-\d+|standings-\d+|sync-status)\.json)\Z')
+ALLOWED = re.compile(r'data/(?:providers/football-data-org/standings-(?:SA|PL|PD|BL1|FL1|PPL)-\d{4}\.json|raw/(?:I1|E0|SP1|D1|F1|P1)_20\d\d-\d\d\.csv|providers/understat/(?:league-(?:Serie_A|EPL|La_liga|Bundesliga|Ligue_1)-\d{4}|match-\d+)\.json|providers/sportmonks/(?:match-\d+|leagues-page-\d+|standings-\d+|sync-status)\.json)\Z')
 
 
 def utcnow():
     return datetime.now(timezone.utc)
+
+
+def completed_today(value, now):
+    """Only a full successful acquisition advances this marker, never cache tests."""
+    try:
+        completed = datetime.fromisoformat(value)
+        return completed.tzinfo is not None and completed <= now and completed.astimezone(timezone.utc).date() == now.date()
+    except (ValueError, TypeError):
+        return False
+
+
+def coverage(snapshot):
+    from premium_stats import observations
+    players, teams, warnings = observations(snapshot)
+    rows = []
+    for league, season in sorted({(r['league'], r['season']) for r in teams}):
+        selected = [r for r in teams if (r['league'], r['season']) == (league, season)]
+        individual = [r for r in players if (r['league'], r['season']) == (league, season) and (r.get('minutes') or 0) > 0]
+        rows.append(dict(league=league, season=season, teams=len({r['team'] for r in selected}),
+                         team_rows=len(selected), player_rows=len(individual),
+                         latest_match=max(r['date'] for r in selected),
+                         shots_on_target=sum(r['stats'].get('shots-on-target') is not None for r in selected)))
+    issues = set(warnings + [issue for row in teams for issue in row.get('player_data_issues', [])])
+    return dict(leagues=rows, quality_warnings=len(issues))
+
+
+def write_summary(state):
+    """Safe job summary: no connection details, tokens, raw payloads or URLs."""
+    target = os.environ.get('GITHUB_STEP_SUMMARY')
+    if not target:
+        return
+    safe = public_report(state)
+    text = ['## Football archive sync', '', f"Status: **{safe['status']}**", '',
+            f"Stage: {safe.get('stage', 'complete')}",
+            f"Changed fixtures: {safe.get('changed_fixtures', '—')}",
+            f"Provider requests: {json.dumps({public_report(k): v for k, v in safe.get('requests', {}).items()})}", '']
+    if safe.get('reason'):
+        text.extend([f"Reason: {safe['reason']}", ''])
+    text.extend(['| League | Season | Teams | Team observations | Player appearances | Latest match | Shots on target coverage |',
+                 '|---|---|---:|---:|---:|---|---|'])
+    for row in safe.get('coverage', {}).get('leagues', []):
+        text.append(f"| {row['league']} | {row['season']} | {row['teams']} | {row['team_rows']} | {row['player_rows']} | {row['latest_match']} | {row['shots_on_target']}/{row['team_rows']} |")
+    text.extend(['', 'Counts refer to the imported sample, not guaranteed full-season coverage.',
+                 f"Quality warnings: {safe.get('coverage', {}).get('quality_warnings', '—')}", ''])
+    with Path(target).open('a', encoding='utf-8') as handle:
+        handle.write('\n'.join(text))
 
 
 def retry_delay(value, now):
@@ -134,6 +181,7 @@ def download(store, season):
     cutoff = today - timedelta(days=7)
     # Refresh catalogues first, then only new or recent match details.
     for league in LEAGUES:
+        store.stage = 'league fixtures: ' + league
         listing = store.understat(f'getLeagueData/{league}/{season}', f'league-{league}-{season}.json', True)
         matches = [m for m in listing['data']['dates'] if m.get('isResult') is True and m['datetime'][:10] <= today.isoformat()]
         for match in sorted(matches, key=lambda m:m['datetime'], reverse=True):
@@ -142,6 +190,7 @@ def download(store, season):
             store.understat('getMatchData/' + mid, 'match-' + mid + '.json', match['datetime'][:10] >= cutoff.isoformat())
         print(league + ': cached completed fixtures ' + str(len(matches)), flush=True)
     for code in ('I1','E0','SP1','D1','F1','P1'):
+        store.stage = 'season CSV: ' + code
         path = ROOT / f'data/raw/{code}_{season}-{(season+1)%100:02}.csv'
         checked_key=f'checked:csv:{season}:{code}'
         checked=max(path.stat().st_mtime if path.exists() else 0,store.get(checked_key,0))
@@ -156,6 +205,7 @@ def download(store, season):
         raise ValueError('SPORTMONKS_TOKEN must be configured for automatic updates')
     if time.time()-store.get('checked:sportmonks',0) < 86400:
         return
+    store.stage = 'Sportmonks fixtures'
     class Sportmonks(fetch_provider.Client):
         def get(self, endpoint, **params):
             data = json.loads(store.fetch('sportmonks', self.base + endpoint + '?' + urlencode(params),
@@ -213,7 +263,10 @@ def main():
     parser.add_argument('--cached-only',action='store_true')
     parser.add_argument('--standings-only',action='store_true')
     parser.add_argument('--season',type=int)
+    parser.add_argument('--if-needed',action='store_true',help='Skip after a successful full sync today (UTC)')
     args=parser.parse_args()
+    if args.if_needed and (args.seed_cache or args.cached_only or args.standings_only or args.season):
+        parser.error('--if-needed applies only to the current full scheduled sync')
     if args.standings_only and (args.cached_only or args.seed_cache):
         parser.error('--standings-only cannot be combined with cache-only modes')
     load_config();fetch_provider.load_env()
@@ -222,9 +275,16 @@ def main():
         if conn.info.host.endswith('.pooler.supabase.com') and conn.info.port == 6543:
             raise ValueError('Use the session pooler on port 5432 for session advisory locks')
         if not conn.execute('SELECT pg_try_advisory_lock(%s)',[SYNC_LOCK]).fetchone()[0]:
+            write_summary({'status':'skipped','reason':'Another sync holds the database lock.'})
             print('Another sync/import is running: skipped.');return 0
         store=Store(conn)
+        store.stage = 'restore persistent cache'
         try:
+            if args.if_needed and completed_today(store.get('last_success'), utcnow()):
+                state = dict(status='skipped', time=utcnow().isoformat(), reason='Full sync already succeeded today.', requests=store.calls)
+                store.set('last_attempt', state)
+                write_summary(state)
+                print('Full sync already succeeded today; no provider requests.');return 0
             if args.seed_cache:
                 paths=[p for p in (ROOT/'data').rglob('*') if p.is_file() and ALLOWED.fullmatch(p.relative_to(ROOT).as_posix())]
                 for path in paths: store.persist(path)
@@ -235,19 +295,30 @@ def main():
                 now=utcnow();season=args.season or (now.year if now.month>=7 else now.year-1)
                 download(store,season)
             if not args.cached_only:
+                store.stage = 'Sportmonks standings'
                 download_standings(store)
                 from fetch_org_standings import download as download_org
+                store.stage = 'football-data.org standings'
                 download_org(store, ROOT, utcnow())
-            result=import_snapshot(conn,local_snapshot())
+            store.stage = 'normalize and validate'
+            snapshot = local_snapshot()
+            inventory = coverage(snapshot)
+            store.stage = 'Supabase import'
+            result=import_snapshot(conn,snapshot)
             if not args.cached_only and not args.standings_only: store.set('last_success',utcnow().isoformat())
-            store.set('last_run',{'status':'success','time':utcnow().isoformat(),'requests':store.calls,**result})
-            print(json.dumps({'requests':store.calls,**result}),flush=True)
+            state = {'status':'success','stage':'complete','time':utcnow().isoformat(),'cached_only':args.cached_only,
+                     'requests':store.calls,'coverage':inventory,**result}
+            store.set('last_run',state)
+            write_summary(state)
+            print(json.dumps(public_report({'requests':store.calls,**result})),flush=True)
             return 0
         except Exception as exc:
             # Never emit raw provider/connection exception text or credentials.
             reason = str(exc) if type(exc) is RuntimeError else type(exc).__name__
-            store.set('last_run',{'status':'failed','time':utcnow().isoformat(),'reason':reason,'requests':store.calls})
-            print('Sync failed: '+reason+'. Cached responses retained; imports are atomic.',file=sys.stderr)
+            state = {'status':'failed','stage':store.stage,'time':utcnow().isoformat(),'reason':reason,'requests':store.calls}
+            store.set('last_run',state)
+            write_summary(state)
+            print(public_report('Sync failed at '+store.stage+': '+reason+'. Cached responses retained; imports are atomic.'),file=sys.stderr)
             return 1
         finally:
             conn.execute('SELECT pg_advisory_unlock(%s)',[SYNC_LOCK])

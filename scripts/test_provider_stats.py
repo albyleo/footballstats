@@ -2,6 +2,8 @@ import sys
 from pathlib import Path
 import unittest
 from unittest.mock import patch
+import json
+import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import provider_stats as stats
@@ -10,6 +12,24 @@ from webapp import app
 
 
 class StatsTests(unittest.TestCase):
+    def test_unidentified_roster_slot_does_not_break_archive_or_complete_xi(self):
+        match = dict(id=1, league_id=1, season_id=1, starting_at='2026-10-13',
+                     state={'state':'FT'}, participants=[{'id':1,'name':'A'},{'id':2,'name':'B'}],
+                     lineups=[dict(player_id=pid, player_name='Player', team_id=1, type_id=11)
+                              for pid in [None,*range(2,12)]])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root/'match-1.json').write_text(json.dumps({'data':match,'fetched_at':'now'}),encoding='utf-8')
+            with (patch.object(stats,'audit_match',return_value={'status':'source_only'}),
+                  patch.object(stats.csv_stats,'load_rows',return_value=([],[])),
+                  patch.object(stats.understat_stats,'load_rows',return_value=([],[],[]))):
+                players, teams, warnings = stats._dataset(str(root), 'roster-test')
+            self.assertEqual(len(players),10)
+            self.assertEqual(len(teams[0]['starters']),10)
+            self.assertTrue(teams[0]['player_data_issues'])
+            self.assertEqual(warnings,[])
+            self.assertNotIn(None,[p['id'] for p in players])
+
     def test_shots_on_target_conceded_missing_zero_and_filters(self):
         import premium_stats
         base = dict(provider='sportmonks', league='L', season='S', date='2026-10-10', fetched_at='now')

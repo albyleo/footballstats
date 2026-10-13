@@ -82,6 +82,10 @@ def _dataset(directory, signature):
                 "league_id": match["league_id"],
                 "season": (match.get("season") or {}).get("name", str(match["season_id"])), "fetched_at": fetched}
         for player in match.get("lineups", []):
+            # Some fixture rosters contain placeholders without a player ID.
+            # They cannot be stored as identified appearances or a complete XI.
+            if type(player.get('player_id')) is not int or player['player_id'] <= 0:
+                continue
             stats = details(player.get("details", []))
             # Unused substitutes remain in roster data but are not appearances.
             players.append({**base, "id": player["player_id"], "name": player["player_name"],
@@ -99,10 +103,15 @@ def _dataset(directory, signature):
             gf, ga = scores.get(tid), scores.get(opponent)
             outcome = None if gf is None or ga is None else ("V" if gf > ga else "P" if gf == ga else "S")
             starters = sorted(p["player_id"] for p in match.get("lineups", [])
-                              if p["team_id"] == tid and p.get("type_id") == 11)
+                              if p["team_id"] == tid and p.get("type_id") == 11
+                              and type(p.get('player_id')) is int and p['player_id'] > 0)
+            missing_players = sum(p.get('team_id') == tid and
+                                  (type(p.get('player_id')) is not int or p['player_id'] <= 0)
+                                  for p in match.get('lineups', []))
             teams.append({**base, "id": tid, "name": name, "team": name, "stats": stats,
                           "venue": venues.get(tid), "opponent": names.get(opponent),
-                          "outcome": outcome, "starters": starters, "halftime_audit": audit})
+                          "outcome": outcome, "starters": starters, "halftime_audit": audit,
+                          **({'player_data_issues': [f"Sportmonks {match['id']}: {missing_players} giocatori senza identificativo esclusi."]} if missing_players else {})})
     csv_rows, csv_warnings = csv_stats.load_rows(csv_stats.files())
     teams.extend(csv_rows)
     warnings.extend(csv_warnings)

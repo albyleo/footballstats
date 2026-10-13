@@ -9,11 +9,32 @@ import time
 from unittest.mock import Mock, patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 from sync_diff import changed_fixtures
-from scheduled_sync import ALLOWED, Store, retry_delay, download
+from scheduled_sync import ALLOWED, Store, retry_delay, download, completed_today, coverage, write_summary
 from urllib.error import HTTPError
 
 
 class IncrementalTests(unittest.TestCase):
+    def test_backup_guard_only_accepts_today_success_marker(self):
+        now = datetime(2026,10,13,8,tzinfo=timezone.utc)
+        self.assertTrue(completed_today('2026-10-13T05:30:00+00:00', now))
+        for value in (None, '', 'invalid', '2026-10-13T05:30:00',
+                      '2026-10-12T05:30:00+00:00', '2026-10-13T09:30:00+00:00'):
+            self.assertFalse(completed_today(value, now))
+
+    def test_summary_lists_partial_coverage_and_omits_internal_label(self):
+        base = dict(provider='p',fixture='1',league='League',season='S',date='2026-10-12',stats={})
+        snapshot = dict(players=[],teams=[{**base,'id':1,'team':'A','name':'A'},
+                                         {**base,'id':2,'team':'B','name':'B','stats':{'shots-on-target':0}}],warnings=[])
+        data = coverage(snapshot)
+        self.assertEqual(data['leagues'][0]['shots_on_target'], 1)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)/'summary.md'
+            with patch.dict(os.environ, {'GITHUB_STEP_SUMMARY':str(target)}):
+                write_summary(dict(status='success',coverage=data,requests={'understat':2}))
+            text = target.read_text(encoding='utf-8')
+            self.assertIn('1/2', text)
+            self.assertNotIn('understat', text.lower())
+
     def snapshot(self):
         return {'players':[{'provider':'p','fixture':1,'id':4,'fetched_at':'old','stats':{'goals':0}}],
                 'teams':[{'provider':'p','fixture':1,'id':2,'fetched_at':'old','stats':{'goals':1}}]}
@@ -40,6 +61,11 @@ class IncrementalTests(unittest.TestCase):
         for path in ['../../.env','data/providers/understat/../../.env','data/providers/sportmonks/cache/token.json']:
             self.assertIsNone(ALLOWED.fullmatch(path))
         self.assertIsNotNone(ALLOWED.fullmatch('data/providers/understat/match-123.json'))
+        from fetch_understat import LEAGUES
+        for league in LEAGUES:
+            with self.subTest(league=league):
+                self.assertIsNotNone(ALLOWED.fullmatch(f'data/providers/understat/league-{league}-2026.json'))
+        self.assertIsNone(ALLOWED.fullmatch('data/providers/understat/league-Unknown-2026.json'))
 
     def test_retry_after_seconds_and_date(self):
         now=datetime(2026,10,11,tzinfo=timezone.utc)

@@ -5,6 +5,14 @@ alle 07:15 Europe/Rome (gestione automatica ora legale). GitHub può ritardare
 o perdere esecuzioni pianificate; sui repository pubblici lo schedule viene
 disabilitato dopo 60 giorni senza attività. Non è un servizio real-time.
 
+È previsto un secondo avvio alle 09:45 negli stessi giorni. Entrambi gli
+avvii programmati usano `--if-needed`: sotto lock PostgreSQL verificano
+`last_success` e saltano download e importazione se l'acquisizione completa
+è già riuscita nella giornata UTC. Una prova `cached_only` non soddisfa questo
+controllo. Il recupero mantiene budget, cache, cooldown e blocchi: non aggira
+un rifiuto del provider. Non garantisce l'esecuzione se GitHub perde entrambi
+gli eventi. L'avvio manuale completo rimane disponibile.
+
 ## Configurazione una tantum
 
 1. Applicare `supabase/migrations/202610110002_sync_jobs.sql` come amministratore.
@@ -105,6 +113,17 @@ from football.sync_cache;
 ```
 
 La run ha timeout di 30 minuti. Le credenziali non sono stampate nei log.
+Il riepilogo della run mostra fase raggiunta, richieste, partite cambiate e
+copertura per campionato (squadre, osservazioni, presenze giocatore, ultima
+partita e tiri in porta disponibili). Questi conteggi descrivono il campione,
+non certificano la completezza della stagione. In caso di errore, `last_run`
+registra anche la fase che lo ha generato. Se l'evento programmato non viene
+creato da GitHub, lo script non può registrarne il mancato avvio.
+
+I nomi dei cinque cataloghi sono ammessi esplicitamente nella cache,
+compreso `Ligue_1`: la cifra fa parte del nome del campionato. I test
+verificano l'intero elenco, oltre a respingere percorsi non autorizzati.
+
 Il file workflow richiede solo `contents: read`; non effettua commit o push.
 Su GitHub pubblico i runner standard sono gratuiti, nei limiti delle policy
 del servizio. Fonti: https://docs.github.com/en/billing/concepts/product-billing/github-actions

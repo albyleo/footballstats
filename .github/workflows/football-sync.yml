@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: '15 7 * * 2,5'
       timezone: Europe/Rome
+    # Recovery attempt; the database guard skips it after a successful full sync.
+    - cron: '45 9 * * 2,5'
+      timezone: Europe/Rome
   workflow_dispatch:
     inputs:
       cached_only:
@@ -44,9 +47,12 @@ jobs:
       - name: Acquire and import changed fixtures
         env:
           CACHED_ONLY: ${{ inputs.cached_only }}
+          TRIGGER_EVENT: ${{ github.event_name }}
         run: |
           if [ "$CACHED_ONLY" = "true" ]; then
             uv run --frozen python scripts/scheduled_sync.py --cached-only
+          elif [ "$TRIGGER_EVENT" = "schedule" ]; then
+            uv run --frozen python scripts/scheduled_sync.py --if-needed
           else
             uv run --frozen python scripts/scheduled_sync.py
           fi
