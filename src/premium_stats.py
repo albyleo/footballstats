@@ -1,12 +1,14 @@
 """Read-only analytics over normalized observations. No external requests."""
 from collections import defaultdict
-import hashlib
 import math
 import statistics
 
 import provider_stats
 import upcoming
 import understat_stats
+import matchup_stats
+import availability
+from entity_identity import identity
 
 RATIOS = {'xg-per-shot': ('xg', 'shots-total', 1, 'xG per tiro'),
           'on-target-share': ('shots-on-target', 'shots-total', 100, 'Tiri in porta (%)'),
@@ -37,16 +39,12 @@ def observations(snapshot=None):
         for row in rows:
             opponents = [other for other in rows if other['id'] != row['id']]
             conceded = opponents[0]['stats'].get('shots-total') if len(rows) == 2 and len(opponents) == 1 else None
-            enriched.append({**row, 'stats': {**row['stats'], 'shots-conceded': conceded}})
+            opponent_stats = opponents[0]['stats'] if len(rows) == 2 and len(opponents) == 1 else {}
+            enriched.append({**row, 'stats': {**row['stats'], 'shots-conceded': conceded,
+                'corners-conceded': opponent_stats.get('corners'),
+                'first-half-goals-conceded': opponent_stats.get('first-half-goals')}})
     players, teams, extra = understat_stats.merge_sources(players, enriched)
     return players, teams, sorted(set(warnings + extra))
-
-
-def identity(row, kind):
-    parts = [kind, row['league'], row['season'], row['team']]
-    if kind == 'players':
-        parts += [row['provider'], str(row['id'])]
-    return hashlib.sha256('\0'.join(parts).encode()).hexdigest()[:24]
 
 
 def value(row, metric, basis):
@@ -144,8 +142,12 @@ def report(kind='teams', league='', season='', entity='', compare='', metric='xg
         result = profile(groups[key],kind,metric,basis,venue,last_n,threshold)
         result['next_fixture'] = upcoming.lookup(next_games, groups[key][0])
         return result
+    primary = build(entity)
+    matchup = (matchup_stats.build(teams, groups[entity][0], primary['next_fixture'], last_n,
+                   players=players, availability_data=availability.load() if snapshot is None else snapshot.get('availability', {}))
+               if kind == 'teams' and primary else None)
     return dict(access='open_preview', leagues=leagues, seasons=seasons, entities=entities, metrics=metrics(kind),
                 filters=dict(kind=kind,league=league,season=season,entity=entity,compare=compare,metric=metric,venue=venue,last_n=last_n,basis=basis,threshold=threshold),
-                primary=build(entity),
+                primary=primary, matchup=matchup,
                 comparison=build(compare),
                 warnings=warnings)

@@ -26,7 +26,7 @@ from psycopg.types.json import Jsonb
 from public_report import public_report
 
 LIMITS = {'understat': 250, 'csv': 6, 'sportmonks': 20, 'football-data.org': 12}
-ALLOWED = re.compile(r'data/(?:providers/football-data-org/standings-(?:SA|PL|PD|BL1|FL1|PPL)-\d{4}\.json|raw/(?:I1|E0|SP1|D1|F1|P1)_20\d\d-\d\d\.csv|providers/understat/(?:league-(?:Serie_A|EPL|La_liga|Bundesliga|Ligue_1)-\d{4}|match-\d+)\.json|providers/sportmonks/(?:match-\d+|leagues-page-\d+|standings-\d+|sync-status)\.json)\Z')
+ALLOWED = re.compile(r'data/(?:providers/football-data-org/standings-(?:SA|PL|PD|BL1|FL1|PPL)-\d{4}\.json|raw/(?:I1|E0|SP1|D1|F1|P1)_20\d\d-\d\d\.csv|providers/understat/(?:league-(?:Serie_A|EPL|La_liga|Bundesliga|Ligue_1)-\d{4}|match-\d+)\.json|providers/sportmonks/(?:match-\d+|leagues-page-\d+|standings-\d+|sync-status|availability)\.json)\Z')
 
 
 def utcnow():
@@ -69,6 +69,9 @@ def write_summary(state):
             f"Provider requests: {json.dumps({public_report(k): v for k, v in safe.get('requests', {}).items()})}", '']
     if safe.get('reason'):
         text.extend([f"Reason: {safe['reason']}", ''])
+    if safe.get('availability'):
+        text.extend([f"Squad availability: {safe['availability']['status']}",
+                     'Missing or stale absence reports do not imply a fully available squad.', ''])
     text.extend(['| League | Season | Teams | Team observations | Player appearances | Latest match | Shots on target coverage |',
                  '|---|---|---:|---:|---:|---|---|'])
     for row in safe.get('coverage', {}).get('leagues', []):
@@ -257,6 +260,37 @@ def download_standings(store):
         print(f"Standings {league['name']}: {len(rows)} teams", flush=True)
 
 
+def download_availability(store):
+    """Optional feed: preserve the last valid report and the main import on failure."""
+    from fetch_availability import acquire, save as save_availability
+    path = ROOT / 'data/providers/sportmonks/availability.json'
+    if path.exists():
+        try:
+            checked = datetime.fromisoformat(json.loads(path.read_text(encoding='utf-8'))['fetched_at'])
+            if 0 <= (utcnow() - checked).total_seconds() < 86400:
+                return {'status':'cached'}
+        except (ValueError, TypeError, KeyError):
+            pass
+    if time.time() - store.get('checked:availability-attempt', 0) < 86400:
+        return {'status':'deferred_after_failure'}
+    store.set('checked:availability-attempt', time.time())
+    try:
+        class AvailabilityClient(fetch_provider.Client):
+            def get(self, endpoint, **params):
+                raw = store.fetch('sportmonks', self.base + endpoint + '?' + urlencode(params),
+                    {'Authorization':self.key, 'Accept':'application/json', 'User-Agent':'MyComboDataSync/1.0'})
+                self.last_fetched_at = utcnow().isoformat()
+                return json.loads(raw)
+        data = acquire(AvailabilityClient('sportmonks', 0), utcnow().date(), max_pages=2)
+        save_availability(data, path)
+        store.persist(path)
+        return {'status':'updated', 'fixtures':len(data['fixtures'])}
+    except Exception as exc:
+        # Absence access is optional. No raw provider response or credentials in logs.
+        print('Availability not refreshed; previous report retained (' + type(exc).__name__ + ').', flush=True)
+        return {'status':'unavailable', 'error_type':type(exc).__name__}
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--seed-cache',action='store_true')
@@ -291,6 +325,7 @@ def main():
                 print('Seeded cached files:',len(paths));return 0
             if not store.hydrate(): raise ValueError('Persistent cache empty: run --seed-cache first')
             store.set('last_run',{'status':'running','time':utcnow().isoformat(),'cached_only':args.cached_only})
+            availability_status = {'status':'not_requested'}
             if not args.cached_only and not args.standings_only:
                 now=utcnow();season=args.season or (now.year if now.month>=7 else now.year-1)
                 download(store,season)
@@ -300,6 +335,9 @@ def main():
                 from fetch_org_standings import download as download_org
                 store.stage = 'football-data.org standings'
                 download_org(store, ROOT, utcnow())
+            if not args.cached_only and not args.standings_only:
+                store.stage = 'Sportmonks availability'
+                availability_status = download_availability(store)
             store.stage = 'normalize and validate'
             snapshot = local_snapshot()
             inventory = coverage(snapshot)
@@ -307,7 +345,7 @@ def main():
             result=import_snapshot(conn,snapshot)
             if not args.cached_only and not args.standings_only: store.set('last_success',utcnow().isoformat())
             state = {'status':'success','stage':'complete','time':utcnow().isoformat(),'cached_only':args.cached_only,
-                     'requests':store.calls,'coverage':inventory,**result}
+                     'requests':store.calls,'coverage':inventory,'availability':availability_status,**result}
             store.set('last_run',state)
             write_summary(state)
             print(json.dumps(public_report({'requests':store.calls,**result})),flush=True)

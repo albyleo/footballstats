@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / 'src'))
 import provider_stats
 import standings
 import upcoming
+import availability
 from cloud_store import connect, StorageUnavailable
 from sync_diff import changed_fixtures, SYNC_LOCK
 
@@ -34,7 +35,7 @@ def local_snapshot():
     players, teams, warnings = provider_stats.dataset()
     status = provider_stats.ROOT / 'sync-status.json'
     return dict(players=players, teams=teams, warnings=warnings,
-                standings=standings.load(), upcoming=upcoming.load(),
+                standings=standings.load(), upcoming=upcoming.load(), availability=availability.load(),
                 catalog=provider_stats.catalog(),
                 sync=json.loads(status.read_text()) if status.exists() else None)
 
@@ -64,7 +65,8 @@ def import_snapshot(conn, snapshot):
         changed = changed_fixtures(snapshot, old_players, old_teams)
         merged_catalog = {**previous.get('catalog', {}), **{str(k):v for k,v in snapshot['catalog'].items()}}
         merged_standings = {**previous.get('standings', {}), **snapshot.get('standings', {})}
-        if not changed and snapshot.get('upcoming', previous.get('upcoming', [])) == previous.get('upcoming', []) and merged_catalog == previous.get('catalog', {}) and merged_standings == previous.get('standings', {}):
+        merged_availability = snapshot.get('availability') or previous.get('availability', {})
+        if not changed and snapshot.get('upcoming', previous.get('upcoming', [])) == previous.get('upcoming', []) and merged_catalog == previous.get('catalog', {}) and merged_standings == previous.get('standings', {}) and merged_availability == previous.get('availability', {}):
             return {**counts(snapshot), 'changed_fixtures': 0, 'updated': False}
         original_counts = counts(snapshot)
         snapshot = {**snapshot, **{kind: [r for r in snapshot[kind]
@@ -91,7 +93,7 @@ def import_snapshot(conn, snapshot):
                             [(r['provider'],str(r['fixture']),str(r['id']),str(r['team_id']),Jsonb(r)) for r in snapshot['players']])
         previous = conn.execute('SELECT metadata FROM football.dataset_state WHERE id=1').fetchone()[0]
         merged_catalog = {**previous.get('catalog', {}), **{str(k):v for k,v in snapshot['catalog'].items()}}
-        metadata = {**previous, 'upcoming': snapshot.get('upcoming', previous.get('upcoming', [])), 'catalog': merged_catalog, 'standings': merged_standings, 'sync': snapshot['sync'], 'warnings': snapshot['warnings']}
+        metadata = {**previous, 'availability': merged_availability, 'upcoming': snapshot.get('upcoming', previous.get('upcoming', [])), 'catalog': merged_catalog, 'standings': merged_standings, 'sync': snapshot['sync'], 'warnings': snapshot['warnings']}
         conn.execute('UPDATE football.dataset_state SET revision=revision+1,metadata=%s,updated_at=now() WHERE id=1', [Jsonb(metadata)])
     return {**original_counts, 'changed_fixtures': len(changed), 'updated': True}
 

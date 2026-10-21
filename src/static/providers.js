@@ -79,20 +79,41 @@ function options(id, values) {
   values.forEach(value => select.add(new Option(value, value)));
   select.value = values.includes(previous) ? previous : '';
 }
+function profileCell(tr, row, player, detail, exporting) {
+  const td = cell(tr, 'td', row.name, player && detail ? row.team : null);
+  if (!exporting && row.entity_id) {
+    const params = new URLSearchParams({
+      kind: player ? 'players' : 'teams', league: row.league, season: row.season,
+      entity: row.entity_id, metric: $('metric').value, last_n: $('last_n').value,
+      venue: 'all', basis: player && $('sort').value === 'per90' ? 'per90' : 'match'
+    });
+    const link = document.createElement('a');
+    link.href = '/premium?' + params;
+    link.textContent = row.name;
+    link.className = 'profile-link';
+    link.title = `Analisi Premium: ${row.name} · ${latest.metrics[$('metric').value]}`;
+    td.firstChild.replaceWith(link);
+  }
+  return td;
+}
 function lineupCell(tr, row, exporting) {
   const info = row.season_lineup;
   const names = info?.reference.map(p=>`${p.name} (${p.starts} da titolare)`).join('; ') || '';
   const note = info ? `Ultima: ${info.latest_date}. Base su ${info.sample}/${info.season_matches} formazioni stagionali. ${info.tie?'Pari merito al taglio degli 11; ordine per minuti e ID. ':''}${names}` : 'Formazioni non disponibili';
   const td = cell(tr,'td',info?.latest_common == null ? null : `${info.latest_common}/11 nell’ultima`, exporting ? note : null);
+  td.classList.add('lineup-column');
   if (!exporting && info) {
     const details=document.createElement('details'), summary=document.createElement('summary'), text=document.createElement('p');
     summary.textContent=`Base: ${info.sample}/${info.season_matches} partite`;
     text.textContent=note;details.append(summary,text);td.append(details);
   }
   const next=cell(tr,'td',null, 'Formazione non acquisita');
-  if (!exporting) {
+  next.classList.add('next-lineup');
+  if (!exporting && row.lineup_search) {
     const link=document.createElement('a');
-    link.href='https://www.google.com/search?q='+encodeURIComponent(`${row.team} ${row.league} prossima partita formazioni ufficiali`);
+    link.href=row.lineup_search.url;
+    link.title=row.lineup_search.query;
+    link.hreflang=row.lineup_search.language;
     link.target='_blank';link.rel='noopener noreferrer';link.textContent='Cerca formazioni ↗';
     next.append(link);
   }
@@ -104,22 +125,33 @@ function renderTable(all = false) {
   const defaults = player ? ['goals','xg','assists','xa','shots-on-target','shots-total','yellowcards','fouls','fouls-drawn'] : ['goals','xg','shots-on-target-conceded','goals-conceded','xga','first-half-goals','shots-on-target','shots-total','yellowcards','fouls','corners'];
   const keys = [...new Set([metric, ...defaults])].filter(k => latest.metric_coverage[k] > 0 || ['fouls-drawn','shots-total','goals-conceded','shots-on-target-conceded'].includes(k));
   const table = document.createElement('table'), head = document.createElement('thead'), header = document.createElement('tr');
+  table.className = player ? 'players-table' : 'teams-table';
   const caption = document.createElement('caption'); caption.className = 'sr-only'; caption.textContent = `${player ? 'Giocatori' : 'Squadre'}: ${metricName}`; table.append(caption);
   const columns = detail ? [player?'Giocatore':'Squadra','Campionato',metricName,player?'Per 90′ osservati':'Media per partita',player?'Minuti osservati':'Partite con dato',player?'Presenze':'Partite',player?'Minuti totali':'Ultimi risultati',player?'Da titolare':'Base titolare stagionale'] : [player?'Giocatore':'Squadra',player?'Squadra':'Campionato',...keys.map(k=>latest.metrics[k]),player?'Minuti':'Ultimi risultati',player?'Presenze':'Partite',player?'Da titolare':'Base titolare stagionale'];
-  if (!player) {columns.splice(2,0,'Prossimo avversario (campionato)','Posizione in classifica');columns.push('Prossima partita / base');}
-  columns.forEach((value, index) => {const th=cell(header, 'th', value);if(!player && index===2)th.classList.add('next-opponent');}); head.append(header); table.append(head);
+  if (!player) {
+    columns.splice(1,1);
+    columns.splice(1,0,'Prossimo avversario (campionato)','Posizione in classifica');
+    columns.push('Prossima partita / base','Campionato');
+  }
+  const columnClasses = {'Prossimo avversario (campionato)':'next-opponent','Posizione in classifica':'standing-column',
+    'Base titolare stagionale':'lineup-column','Prossima partita / base':'next-lineup','Campionato':'league-column'};
+  columns.forEach((value, index) => {
+    const th=cell(header, 'th', value);
+    if(!player && columnClasses[value])th.classList.add(columnClasses[value]);
+    if(player && index===1)th.classList.add('entity-context');
+  }); head.append(header); table.append(head);
   const body = document.createElement('tbody');
   page = Math.min(page, Math.max(0, Math.ceil(latest.rows.length/size)-1));
   for (const row of (all === true ? latest.rows : latest.rows.slice(page*size,(page+1)*size))) {
     const tr = document.createElement('tr');
-    cell(tr,'td',row.name,player&&detail?row.team:null);
-    cell(tr,'td',player&&!detail?row.team:row.league,player&&!detail?row.league:row.season);
+    profileCell(tr,row,player,detail,all === true);
+    if (player) cell(tr,'td',!detail?row.team:row.league,!detail?row.league:row.season).classList.add('entity-context');
     if (!player) {
       const upcoming=row.next_fixture;
       cell(tr,'td',upcoming?.opponent,upcoming ? `${formatDate(upcoming.date)} · ${upcoming.venue==='home'?'Casa':'Trasferta'}` : 'Calendario non disponibile').classList.add('next-opponent');
       const standing=row.standing;
       const note=standing ? `${standing.points == null ? '' : standing.points+' punti · '}${standing.source} · rilevata ${formatDate(standing.fetched_at?.slice(0,10))}${standing.stage ? ' · '+standing.stage : ''}${standing.group ? ' · '+standing.group : ''}` : 'Classifica ufficiale non disponibile nel feed';
-      cell(tr,'td',standing ? `${standing.position}°` : null,note);
+      cell(tr,'td',standing ? `${standing.position}°` : null,note).classList.add('standing-column');
     }
     if (detail) {
       cell(tr,'td',row.total,`${row.covered}/${row.matches} con dato`).className='metric-cell';
@@ -133,6 +165,7 @@ function renderTable(all = false) {
       cell(tr,'td',row.matches);
     }
     if (player) cell(tr,'td',row.starts); else lineupCell(tr,row,all === true);
+    if (!player) cell(tr,'td',row.league,row.season).classList.add('league-column');
     body.append(tr);
   }
   table.append(body);

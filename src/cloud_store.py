@@ -38,7 +38,7 @@ def read_snapshot():
             teams = [r[0] for r in conn.execute('SELECT payload FROM football.team_match_stats ORDER BY provider,fixture_id,team_id')]
             meta = state[1]
             return dict(revision=state[0], players=players, teams=teams,
-                        standings=meta.get('standings', {}), upcoming=meta.get('upcoming', []),
+                        standings=meta.get('standings', {}), upcoming=meta.get('upcoming', []), availability=meta.get('availability', {}),
                         warnings=meta.get('warnings', []), sync=meta.get('sync'),
                         catalog={int(k): v for k,v in meta.get('catalog', {}).items()})
     except psycopg.Error:

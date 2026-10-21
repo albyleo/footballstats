@@ -26,6 +26,78 @@ def snapshot():
 
 
 class PremiumTests(unittest.TestCase):
+    def test_additional_conceded_metrics_are_paired_before_filters(self):
+        data=snapshot()
+        for r in data['teams']:
+            r['stats'].update({'corners':r['id']*3,'first-half-goals':r['id']-1})
+        teams=stats.observations(data)[1]
+        alpha=next(r for r in teams if r['team']=='Alpha')
+        self.assertEqual(alpha['stats']['corners-conceded'],6)
+        self.assertEqual(alpha['stats']['first-half-goals-conceded'],1)
+        data['teams']=data['teams'][:1]
+        alone=stats.observations(data)[1][0]
+        self.assertIsNone(alone['stats']['corners-conceded'])
+
+    def test_upcoming_comparison_http_uses_saved_opponent_stats(self):
+        saved = {**snapshot(), 'revision': 124, 'upcoming': [dict(id='next', league='League',
+                 season='2026/2027', home='Alpha', away='Beta', date='2099-10-25')]}
+        with (patch.object(webapp.cloud_store, 'enabled', return_value=True),
+              patch.object(webapp.cloud_store.SNAPSHOTS, 'get', return_value=saved),
+              patch.object(webapp, 'PREMIUM_CACHE', ReportCache()),
+              patch('urllib.request.urlopen', side_effect=AssertionError('No feed downloads')),
+              patch.dict('os.environ', {'FOOTBALL_PREMIUM_MODE':'open'}), TestClient(webapp.app) as client):
+            response = client.get('/api/premium/report?last_n=5&venue=away&metric=goals')
+            self.assertEqual(response.status_code, 200)
+            report = response.json()
+            matchup = report['matchup']
+            self.assertEqual((matchup['home']['name'], matchup['away']['name']), ('Alpha', 'Beta'))
+            self.assertEqual(matchup['home']['matches'], 5)
+            # Alpha home fixtures 3,5,7,9,11: both produced and opposing conceded average 7.
+            metric = matchup['directions'][0]['metrics'][0]
+            self.assertEqual((metric['attack']['mean'], metric['conceded']['mean']), (7, 7))
+            # Profile filter is away but matchup always follows the scheduled venue.
+            self.assertTrue(all(r['venue'] == 'away' for r in report['primary']['series']))
+            self.assertIsNone(client.get('/api/premium/report?kind=players').json()['matchup'])
+            self.assertEqual(client.get('/api/premium/report?last_n=5&venue=away&metric=goals').headers['x-report-cache'], 'HIT')
+
+    def test_explorer_profile_ids_open_matching_premium_with_filters(self):
+        data = {**snapshot(), 'revision': 123}
+        with (patch.object(webapp.cloud_store, 'enabled', return_value=True),
+              patch.object(webapp.cloud_store.SNAPSHOTS, 'get', return_value=data),
+              patch.object(webapp, 'REPORT_CACHE', ReportCache()),
+              patch.object(webapp, 'PREMIUM_CACHE', ReportCache()),
+              patch('urllib.request.urlopen', side_effect=AssertionError('No feed downloads')),
+              patch.dict('os.environ', {'FOOTBALL_PREMIUM_MODE':'open'}), TestClient(webapp.app) as client):
+            for kind in ('teams', 'players'):
+                params = dict(kind=kind, metric='shots-on-target', last_n=5)
+                rows = client.get('/api/providers/report', params=params).json()['rows']
+                for row in rows:
+                    response = client.get('/api/premium/report', params={**params,
+                        'league':row['league'], 'season':row['season'], 'entity':row['entity_id'],
+                        'basis':'per90' if kind == 'players' else 'match'})
+                    self.assertEqual(response.status_code, 200)
+                    result = response.json()
+                    self.assertEqual(result['primary']['name'], row['name'])
+                    self.assertEqual(result['primary']['team'], row['team'])
+                    self.assertEqual(result['primary']['summary']['total'], row['total'])
+                    self.assertEqual(result['filters']['metric'], 'shots-on-target')
+                    self.assertEqual(result['filters']['last_n'], 5)
+
+    def test_profile_links_distinguish_homonyms_transfers_and_seasons(self):
+        data = snapshot()
+        original = data['players'][0]
+        data['players'] += [{**original, 'id':4, 'stats':{'goals':4}},
+                            {**original, 'team':'Beta', 'stats':{'goals':5}},
+                            {**original, 'season':'2025/2026', 'stats':{'goals':6}}]
+        rows = stats.provider_stats.report(kind='players', metric='goals', snapshot=data)['rows']
+        self.assertEqual(len({r['entity_id'] for r in rows}), 4)
+        for row in rows:
+            profile = stats.report(kind='players', league=row['league'], season=row['season'],
+                                   entity=row['entity_id'], metric='goals', snapshot=data)['primary']
+            self.assertEqual(profile['team'], row['team'])
+            self.assertEqual(profile['season'], row['season'])
+            self.assertEqual(profile['summary']['total'], row['total'])
+
     def test_splits_window_and_season_baseline(self):
         data=snapshot();original=copy.deepcopy(data)
         report=stats.report(league='League',metric='xg',last_n=5,snapshot=data)

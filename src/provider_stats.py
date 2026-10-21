@@ -8,8 +8,10 @@ import csv_stats
 import understat_stats
 import standings
 import upcoming
+import availability
 from lineup_stats import season_lineups
 from score_audit import audit_match, score_value
+from entity_identity import identity
 
 ROOT = Path(__file__).resolve().parents[1] / "data/providers/sportmonks"
 METRICS = {"shots-on-target": "Tiri in porta", "yellowcards": "Gialli",
@@ -46,6 +48,8 @@ def catalog(root=ROOT):
 def input_revision(root=None, include_status=True):
     root = ROOT if root is None else root
     paths = sorted(root.glob("match-*.json")) + sorted(root.glob("leagues-page-*.json")) + sorted(root.glob("standings-*.json")) + standings.files() + csv_stats.files() + understat_stats.files()
+    if availability.PATH.exists():
+        paths.append(availability.PATH)
     if include_status and (root / "sync-status.json").exists():
         paths.append(root / "sync-status.json")
     signature = []
@@ -181,8 +185,11 @@ def report(kind="players", metric="shots-on-target", league="", season="", min_m
         same_starters = None
         if kind == "teams" and len(rows) >= 2 and rows[0]['provider'] == rows[1]['provider'] and all(len(r.get("starters", [])) == 11 for r in rows[:2]):
             same_starters = len(set(rows[0]["starters"]) & set(rows[1]["starters"]))
+        next_fixture = upcoming.lookup(next_games, first)
         result.append({"name": first["name"], "team": first["team"], "league": first["league"],
-                       "next_fixture": upcoming.lookup(next_games, first),
+                       "entity_id": identity(first, kind),
+                       "next_fixture": next_fixture,
+                       "lineup_search": upcoming.lineup_search(first, next_fixture) if kind == 'teams' else None,
                        "standing": standings.lookup(league_positions, first),
                        "provider": first["provider"],
                        "season": first["season"], "matches": len(rows), "covered": len(known),
