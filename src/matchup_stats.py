@@ -101,14 +101,21 @@ def build(teams, selected, fixture, last_n=0, *, today=None, players=(), availab
     prior_players = [p for p in players if p['league'] == selected['league'] and p['season'] == selected['season']
                      and (day := valid_day(p.get('date'))) is not None and day < cutoff]
     lineups = season_lineups(prior_players, history, combine_sources=True)
-    samples, profiles = {}, {}
+    samples, profiles, sample_baselines = {}, {}, {}
     for side, name in (('home', home), ('away', away)):
         team_rows = [r for r in history if r['team'] == name]
         venue_rows = sorted((r for r in team_rows if r.get('venue') == side),
                             key=lambda r: (r['date'], str(r['fixture'])))
-        sample = venue_rows[-last_n:] if last_n else venue_rows
+        expanded = len(venue_rows) < 5
+        eligible = sorted((r for r in team_rows if r.get('venue') in ('home', 'away')),
+                          key=lambda r: (r['date'], str(r['fixture']))) if expanded else venue_rows
+        sample = eligible[-last_n:] if last_n else eligible
+        baseline = [r for r in history if r.get('venue') in ('home', 'away')] if expanded else baselines[side]
+        sample_baselines[side] = baseline
         samples[side] = sample
         profiles[side] = dict(name=name, venue=side, matches=len(sample),
+                             sample_scope='all' if expanded else side,
+                             sample_label='casa + trasferta' if expanded else ('in casa' if side == 'home' else 'in trasferta'),
                              season_venue_matches=len(venue_rows), season_matches=len(team_rows),
                              unknown_venue=sum(r.get('venue') not in ('home', 'away') for r in team_rows),
                              first=sample[0]['date'] if sample else None,
@@ -116,7 +123,7 @@ def build(teams, selected, fixture, last_n=0, *, today=None, players=(), availab
                              entity=identity({**selected, 'team':name}, 'teams') if team_rows else None,
                              goal_frequencies=goal_frequencies(sample))
         p = profiles[side]
-        p['context_metrics'] = [dict(key=key, label=label, **comparison(sample, baselines[side], key))
+        p['context_metrics'] = [dict(key=key, label=label, **comparison(sample, baseline, key))
                                 for key, label in (('fouls', 'Falli commessi'), ('yellowcards', 'Cartellini gialli'))]
         p['quality'] = [dict(label=label, unit=unit, **paired_ratio(sample, n, d, scale))
                         for n, d, scale, label, unit in (
@@ -137,12 +144,14 @@ def build(teams, selected, fixture, last_n=0, *, today=None, players=(), availab
     for side, other in (('home', 'away'), ('away', 'home')):
         directions.append(dict(side=side, attacker=profiles[side]['name'], defender=profiles[other]['name'],
             metrics=[dict(key=attack, label=label,
-                          attack=comparison(samples[side], baselines[side], attack),
-                          conceded=comparison(samples[other], baselines[other], defense))
+                          attack=comparison(samples[side], sample_baselines[side], attack),
+                          conceded=comparison(samples[other], sample_baselines[other], defense))
                      for attack, defense, label in METRICS]))
     notes = []
     for side, profile in profiles.items():
-        field = 'in casa' if side == 'home' else 'in trasferta'
+        field = profile['sample_label']
+        if profile['sample_scope'] == 'all':
+            notes.append(f"{profile['name']}: campione ampliato a casa + trasferta perché sono disponibili solo {profile['season_venue_matches']} gare nel campo del prossimo incontro.")
         if profile['matches'] < 5:
             notes.append(f"{profile['name']}: campione ridotto, {profile['matches']} partite {field}.")
         if profile['unknown_venue']:

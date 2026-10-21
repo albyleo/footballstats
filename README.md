@@ -81,6 +81,8 @@ Visitatori → backend in sola lettura → cache report → archivio
 
 La navigazione e “Rileggi archivio” non chiamano i provider. La cache di lettura accelera le risposte: la sua scadenza non elimina i dati da PostgreSQL.
 
+Avviando la webapp in locale, se `.env.supabase` contiene `FOOTBALL_STORAGE=supabase` e `FOOTBALL_DATABASE_URL`, viene usato lo stesso archivio del sito online. Dopo un import del workflow, la pagina locale legge il nuovo snapshot entro circa 60 secondi e un refresh del browser; non serve copiare i file della cache sul PC. Solo la connessione di lettura viene caricata dalla webapp. Per lavorare offline, impostare `FOOTBALL_STORAGE=local` nell'ambiente del processo prima dell'avvio.
+
 Il workflow `Update football archive` è configurato per martedì e venerdì alle 07:15 Europe/Rome. Usa un blocco PostgreSQL contro esecuzioni simultanee, budget condivisi e cache persistente. Aggiorna le osservazioni per partita quando cambiano; le classifiche sono conservate nei metadati.
 
 Dopo la configurazione Supabase, dalla cartella del repository:

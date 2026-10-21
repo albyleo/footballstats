@@ -121,11 +121,26 @@ app = Starlette(routes=[
 ])
 
 
+def load_local_storage_config(path=None):
+    """Use the local reader settings without loading importer or admin secrets."""
+    path = Path(path) if path is not None else Path(__file__).resolve().parents[1] / '.env.supabase'
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding='utf-8-sig').splitlines():
+        key, separator, value = line.partition('=')
+        key = key.strip()
+        if separator and key in ('FOOTBALL_STORAGE', 'FOOTBALL_DATABASE_URL'):
+            value = value.strip().strip('"\'')
+            if value:
+                os.environ.setdefault(key, value)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8078)
     parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
+    load_local_storage_config()
     print(f"Football UI -> http://{args.host}:{args.port}")
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     return 0

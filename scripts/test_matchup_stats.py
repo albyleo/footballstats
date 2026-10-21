@@ -57,20 +57,34 @@ class MatchupTests(unittest.TestCase):
         self.assertEqual(window['activity']['matches_last_14_days'],7)
         self.assertEqual(window['activity']['days_to_fixture'],13)
 
-    def test_home_away_samples_and_league_baselines(self):
+    def test_small_venue_samples_expand_with_matching_league_baselines(self):
         result = build()
         self.assertEqual(result['mode'], 'descriptive')
         self.assertEqual(result['status'], 'ready')
         self.assertEqual((result['home']['name'], result['away']['name']), ('Alpha', 'Beta'))
-        self.assertEqual((result['home']['matches'], result['away']['matches']), (2, 2))
+        self.assertEqual((result['home']['matches'], result['away']['matches']), (3, 3))
+        self.assertEqual(result['home']['sample_scope'], 'all')
         metric = result['directions'][0]['metrics'][0]
-        self.assertEqual(metric['attack']['mean'], 8)
-        self.assertEqual(metric['conceded']['mean'], 7)
-        self.assertEqual(metric['attack']['baseline']['mean'], 6)
-        self.assertEqual(metric['attack']['difference'], 2)
-        self.assertEqual(metric['conceded']['baseline']['mean'], 7)
-        self.assertEqual(metric['attack']['baseline']['matches'], 4)
-        self.assertEqual(metric['attack']['baseline']['covered'], 3)
+        self.assertAlmostEqual(metric['attack']['mean'], 46/3)
+        self.assertAlmostEqual(metric['conceded']['mean'], 44/3)
+        self.assertEqual(metric['attack']['baseline']['mean'], 12)
+        self.assertAlmostEqual(metric['attack']['difference'], 46/3-12)
+        self.assertAlmostEqual(metric['conceded']['baseline']['mean'], 44/3)
+        self.assertEqual(metric['attack']['baseline']['matches'], 7)
+        self.assertEqual(metric['attack']['baseline']['covered'], 4)
+
+    def test_expanded_window_keeps_five_recent_league_games_against_all_opponents(self):
+        rows = [{**row('Alpha', i, 'home' if i%2 else 'away', goals=i), 'opponent':f'Other {i}'} for i in range(1,9)]
+        rows += [row('Beta', i, 'away', goals=1) for i in range(1,7)]
+        result = build(rows, last_n=5)
+        self.assertEqual(result['home']['matches'], 5)
+        self.assertEqual(result['home']['first'], '2026-10-04')
+        self.assertEqual(result['home']['sample_scope'], 'all')
+        self.assertEqual(result['away']['sample_scope'], 'away')
+        self.assertEqual(result['away']['matches'], 5)
+        self.assertEqual(result['directions'][0]['metrics'][2]['attack']['mean'], 6)
+        self.assertEqual(result['directions'][0]['metrics'][2]['conceded']['baseline']['matches'], 10)
+        self.assertFalse(any('campione ridotto' in n for n in result['notes']))
 
     def test_selecting_away_team_preserves_fixture_orientation(self):
         rows = history()
@@ -93,7 +107,7 @@ class MatchupTests(unittest.TestCase):
     def test_today_fixture_still_excludes_today_observations(self):
         rows = history() + [row('Alpha', 20, 'home', goals=20)]
         result = build(rows, fixture=dict(opponent='Beta', date='2026-10-20', venue='home'))
-        self.assertEqual(result['home']['matches'], 2)
+        self.assertEqual(result['home']['matches'], 3)
 
     def test_window_is_by_venue_before_metric_filtering(self):
         rows = [row('Alpha', i, 'home', **{'shots-on-target':i if i < 6 else None}) for i in range(1, 7)]
@@ -135,7 +149,7 @@ class MatchupTests(unittest.TestCase):
     def test_unknown_venue_is_excluded_and_reported(self):
         rows = history() + [row('Alpha', 11, None, goals=50)]
         result = build(rows)
-        self.assertEqual(result['home']['matches'], 2)
+        self.assertEqual(result['home']['matches'], 3)
         self.assertEqual(result['home']['unknown_venue'], 1)
         self.assertTrue(any('campo non è noto' in note for note in result['notes']))
 

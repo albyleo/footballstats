@@ -35,7 +35,7 @@ window.MyComboMatchup = (() => {
   }
   function frequency(profile) {
     const f = profile.goal_frequencies, card = node('section',null,`matchup-frequency ${profile.venue}`);
-    card.append(node('h3',`${profile.name} · ${profile.venue==='home'?'in casa':'in trasferta'}`));
+    card.append(node('h3',`${profile.name} · ${profile.sample_label}`));
     card.append(node('p',`Gol segnati · ${coverage(f)}`,'muted'));
     if (!f.covered) {
       card.append(node('p','Gol non disponibili per questo campione.','matchup-empty'));
@@ -62,7 +62,7 @@ window.MyComboMatchup = (() => {
   }
   function contextCard(profile) {
     const card=node('section',null,`matchup-context-card ${profile.venue}`);
-    card.append(node('h3',`${profile.name} · ${profile.venue==='home'?'in casa':'in trasferta'}`));
+    card.append(node('h3',`${profile.name} · ${profile.sample_label}`));
     for(const m of profile.quality)card.append(fact(m.label,fmt(m.mean)+(m.mean==null?'':m.unit),`${coverage(m)} · rapporto su partite abbinate`));
     for(const m of profile.context_metrics)card.append(fact(m.label+' / partita',fmt(m.mean),`${coverage(m)} · campionato ${fmt(m.baseline.mean)} (${coverage(m.baseline)}) · scarto ${delta(m.difference)}`));
     for(const [key,label] of [['clean_sheets','Partite senza subire gol'],['scoreless','Partite senza segnare']]) {
@@ -114,14 +114,14 @@ window.MyComboMatchup = (() => {
     container.append(header,node('p',`${date(report.date)} · ${report.league} · ${report.season}`,'muted'));
     const nav=node('nav',null,'matchup-nav');nav.setAttribute('aria-label','Sezioni del confronto');
     for(const [id,label] of [['matchup-duels','Attacco e difesa'],['matchup-indicators','Altri indicatori'],['matchup-roster','Rendimento e rosa'],['matchup-goals','Gol storici']]){const link=node('a',label);link.href='#'+id;nav.append(link);}container.append(nav);
-    const period = report.last_n ? `Ultime ${report.last_n} partite caricate per ciascun campo` : 'Intera stagione caricata per ciascun campo';
-    container.append(node('p',`${period}. Casa e trasferta seguono il calendario; questa sezione è indipendente dai filtri Statistica, Campo e Normalizzazione.`,'matchup-context'));
+    const period = report.last_n ? `Ultime ${report.last_n} partite del campione selezionato` : 'Intera stagione caricata del campione selezionato';
+    container.append(node('p',`${period}. Si usano le gare di campionato contro tutti gli avversari, non soltanto gli scontri diretti. Sotto 5 gare nello stesso campo si includono casa e trasferta. Questa sezione è indipendente dai filtri Statistica, Campo e Normalizzazione.`,'matchup-context'));
     const samples = node('div',null,'matchup-samples');
     for (const side of ['home','away']) {
       const p = report[side], card = node('div',null,`matchup-sample ${side}`);
       card.append(node('span',side==='home'?'CASA':'OSPITI','eyebrow'),node('h3',p.name));
-      card.append(node('p',`${p.matches} partite nel campione · ${p.season_venue_matches} stagionali nello stesso campo`));
-      card.append(node('small',p.latest?`${date(p.first)} → ${date(p.latest)}`:'Nessuna partita caricata per questo campo'));
+      card.append(node('p',`${p.matches} partite · ${p.sample_label} · ${p.season_venue_matches} stagionali nel campo del prossimo incontro`));
+      card.append(node('small',p.latest?`${date(p.first)} → ${date(p.latest)}`:'Nessuna partita caricata per questo campione'));
       if (p.entity) {
         const link = node('a','Apri scheda squadra ↗');
         link.href='/premium?'+new URLSearchParams({kind:'teams',league:report.league,season:report.season,
@@ -134,7 +134,7 @@ window.MyComboMatchup = (() => {
     if (report.notes.length) container.append(node('p',report.notes.join(' '),'matchup-note'));
     const comparisons = node('div',null,'matchup-directions');comparisons.id='matchup-duels';
     report.directions.forEach(d=>comparisons.append(direction(d)));container.append(comparisons);
-    container.append(node('h3','Qualità, disciplina e risultati','matchup-section-title'),node('p','Stesso campione casa/trasferta del confronto. I rapporti usano solo partite con entrambi i dati.','matchup-context'));
+    container.append(node('h3','Qualità, disciplina e risultati','matchup-section-title'),node('p','Stesso campione indicato per ciascuna squadra nel confronto. I rapporti usano solo partite con entrambi i dati.','matchup-context'));
     const context=node('div',null,'matchup-context-grid');context.id='matchup-indicators';context.append(contextCard(report.home),contextCard(report.away));container.append(context);
     container.append(node('h3','Rendimento recente e disponibilità','matchup-section-title'),node('p','Rendimento: ultime 5 gare di campionato, indipendenti dal filtro Periodo. Rosa: segnalazioni del feed per il prossimo incontro, da riconfermare dopo 48 ore.','matchup-context'));
     const squads=node('div',null,'matchup-squads');squads.id='matchup-roster';squads.append(squadCard(report.home),squadCard(report.away));container.append(squads);
@@ -144,8 +144,8 @@ window.MyComboMatchup = (() => {
     frequencies.append(frequency(report.home),frequency(report.away));container.append(frequencies);
     const methodology = node('details',null,'matchup-method');
     methodology.append(node('summary','Campione e metodo di lettura'));
-    methodology.append(node('p',`Si usano osservazioni anteriori al ${date(report.cutoff_exclusive)} (UTC). Le partite dello stesso giorno sono escluse perché il calendario non fornisce un orario verificato. Le medie del campionato usano tutta la stagione precedente al limite, separando casa e trasferta.`));
-    methodology.append(node('p','“Differenza” è la media della squadra meno quella del campionato nello stesso campo: è uno scarto descrittivo, non una misura di vantaggio predittivo. Non corregge la difficoltà degli avversari, infortuni o formazioni. Un campione piccolo o incompleto può cambiare molto dopo una singola partita.'));
+    methodology.append(node('p',`Si usano osservazioni anteriori al ${date(report.cutoff_exclusive)} (UTC). Le partite dello stesso giorno sono escluse perché il calendario non fornisce un orario verificato. Le medie del campionato usano tutta la stagione precedente al limite, nello stesso ambito del campione: campo specifico oppure casa + trasferta.`));
+    methodology.append(node('p','“Differenza” è la media della squadra meno quella del campionato nello stesso ambito del campione: è uno scarto descrittivo, non una misura di vantaggio predittivo. Non corregge la difficoltà degli avversari, infortuni o formazioni. Un campione piccolo o incompleto può cambiare molto dopo una singola partita.'));
     methodology.append(node('p',`Calendario acquisito: ${date(report.schedule_updated)}. Il confronto usa l’archivio salvato e non scarica dati durante la navigazione.`));
     container.append(methodology);
   }
@@ -153,7 +153,7 @@ window.MyComboMatchup = (() => {
     if (!report) return [];
     if (report.status==='unavailable') return [[],['Prossimo incontro',report.reason]];
     const rows = [[],['Prossimo incontro / confronto descrittivo'],[report.home.name,report.away.name,report.date,report.league,report.season],
-      ['Osservazioni anteriori a (UTC)',report.cutoff_exclusive],['Ultime N per campo (0 = stagione)',report.last_n],
+      ['Osservazioni anteriori a (UTC)',report.cutoff_exclusive],['Ultime N nel campione (0 = stagione)',report.last_n],
       ['Calendario acquisito',report.schedule_updated||null],['Note',report.notes.join(' ')],
       ['Differenze storiche; nessuna probabilità prevista. Nessuna correzione per difficoltà degli avversari.']];
     for (const d of report.directions) {
@@ -164,7 +164,7 @@ window.MyComboMatchup = (() => {
     }
     for (const side of ['home','away']) {
       const p=report[side],f=p.goal_frequencies;
-      rows.push([],[p.name,'Altri indicatori',side==='home'?'Casa':'Trasferta'],['Indicatore','Valore','Copertura','Unità']);
+      rows.push([],[p.name,'Altri indicatori',p.sample_label],['Indicatore','Valore','Copertura','Unità']);
       p.quality.forEach(m=>rows.push([m.label,m.mean,coverage(m),m.unit]));
       p.context_metrics.forEach(m=>rows.push([m.label,m.mean,coverage(m),'per partita','Media campionato',m.baseline.mean,'Copertura campionato',coverage(m.baseline)]));
       for(const [key,label] of [['clean_sheets','Senza subire gol'],['scoreless','Senza segnare']])rows.push([label,p[key].covered?p[key].count:null,coverage(p[key])]);
@@ -175,7 +175,7 @@ window.MyComboMatchup = (() => {
       rows.push([],['Disponibilità rosa',a.status,a.message],['Fonte',a.source,'Rilevata (UTC)',a.checked_at],['Base segnalata indisponibile',a.reference_absent,'Dimensione base',a.reference_size],['Giocatore','Categoria','Motivo','Nella base stagionale','Fine periodo indicata (non garantita)']);
       a.absences.forEach(x=>rows.push([x.name,x.category,x.reason,x.in_reference?'Sì':'No',x.expected_end]));
       if(p.lineup)rows.push(['Continuità ultima formazione',p.lineup.latest_common,'Formazioni complete',p.lineup.sample,'Partite stagione',p.lineup.season_matches],['Base stagionale','Titolarità'],...p.lineup.reference.map(x=>[x.name,x.starts]));
-      rows.push([],[p.name,side==='home'?'Casa':'Trasferta',p.first,p.latest],['Frequenze storiche dei gol',coverage(f)],['Gol','Partite','Frequenza storica (0–1)']);
+      rows.push([],[p.name,p.sample_label,p.first,p.latest],['Frequenze storiche dei gol',coverage(f)],['Gol','Partite','Frequenza storica (0–1)']);
       f.bins.forEach(b=>rows.push([b.label,b.count,b.frequency]));
     }
     return rows;

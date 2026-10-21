@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
@@ -15,6 +16,20 @@ from supabase_data import local_snapshot, counts
 
 
 class CloudTests(unittest.TestCase):
+    def test_local_web_startup_loads_only_reader_config(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1] / 'data') as temp:
+            path = Path(temp) / '.env.supabase'
+            path.write_text('FOOTBALL_STORAGE=supabase\nFOOTBALL_DATABASE_URL=reader-test\nFOOTBALL_IMPORT_DATABASE_URL=private-importer\n')
+            with patch.dict(os.environ, {}, clear=True):
+                webapp.load_local_storage_config(path)
+                self.assertTrue(cloud_store.enabled())
+                self.assertEqual(os.environ['FOOTBALL_DATABASE_URL'], 'reader-test')
+                self.assertNotIn('FOOTBALL_IMPORT_DATABASE_URL', os.environ)
+            with patch.dict(os.environ, {'FOOTBALL_STORAGE':'local', 'FOOTBALL_DATABASE_URL':'override'}, clear=True):
+                webapp.load_local_storage_config(path)
+                self.assertFalse(cloud_store.enabled())
+                self.assertEqual(os.environ['FOOTBALL_DATABASE_URL'], 'override')
+
     def test_connection_uses_tls_and_hides_errors(self):
         import psycopg
         with patch.dict(os.environ, {'FOOTBALL_DATABASE_URL':'postgresql://reader:test-password@example.com/db?sslmode=disable'}), \
